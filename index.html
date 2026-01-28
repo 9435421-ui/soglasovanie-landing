@@ -320,6 +320,48 @@
   </blockquote>
 </section>
 
+<section id="news" style="background-color: #FAFAFA; border-top: 1px solid #EEE;">
+  <div class="section-center" style="margin-bottom: 40px;">
+    <h2>Новости и Блог ТЕРИОН</h2>
+    <p>Актуальные советы по перепланировке и новости законодательства</p>
+  </div>
+  <div id="news-container" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px; margin: 0 auto;">
+    <!-- Сюда будут подгружаться новости через JS -->
+    <p style="text-align: center; color: #757575;">Загрузка актуальных новостей...</p>
+  </div>
+</section>
+
+<script>
+    async function loadNews() {
+        try {
+            const response = await fetch('/api/news');
+            const news = await response.json();
+            const container = document.getElementById('news-container');
+
+            if (!news || news.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #757575;">Пока новостей нет. Подписывайтесь на наш <a href="https://t.me/terion_bot" style="color: #2E7D32;">Telegram-канал</a>!</p>';
+                return;
+            }
+
+            container.innerHTML = news.map(item => `
+                <div style="background-color: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #EEE; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="color: #2E7D32; font-size: 0.85rem; font-weight: bold; margin-bottom: 8px; text-transform: uppercase;">Новости ТЕРИОН</div>
+                    <h3 style="margin-bottom: 12px;">${item.title}</h3>
+                    <p style="color: #555; margin-bottom: 16px;">${item.content}</p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #999;">
+                        <span>${new Date(item.date).toLocaleDateString('ru-RU')}</span>
+                        <a href="https://t.me/terion_bot" style="color: #2E7D32; font-weight: 600; text-decoration: none;">Читать в Telegram →</a>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error loading news:', error);
+            document.getElementById('news-container').innerHTML = '<p style="text-align: center; color: #757575;">Не удалось загрузить новости автоматически. <br>Загляните в наш <a href="https://t.me/terion_bot" style="color: #2E7D32;">Telegram-канал</a>.</p>';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', loadNews);
+</script>
+
 <footer>
   <h2>Не теряйте время на отказы.</h2>
   <p>Узнайте уже сегодня — можно ли узаконить вашу перепланировку. Даже если вам говорили «нет».</p>

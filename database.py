@@ -25,7 +25,7 @@ def init_db():
         )
     ''')
 
-    # Таблица контент-плана
+    # Таблица контент-плана (устаревшая, но оставим для совместимости)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS content_plan (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +34,23 @@ def init_db():
             image_url TEXT,
             status TEXT DEFAULT 'draft', -- draft, approved, published
             platform TEXT, -- tg, vk, both
+            scheduled_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Новая таблица: Умный календарь (Медиа-Хаб)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS smart_calendar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rubric TEXT,
+            title TEXT,
+            body_tg TEXT,
+            body_vk TEXT,
+            body_zen TEXT,
+            body_landing TEXT,
+            image_url TEXT,
+            status TEXT DEFAULT 'draft', -- draft, generated, approved, scheduled, published
             scheduled_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -70,6 +87,29 @@ def add_content_draft(title, body, platform='both'):
     cursor.execute('INSERT INTO content_plan (title, body, platform) VALUES (?, ?, ?)', (title, body, platform))
     conn.commit()
     conn.close()
+
+def add_smart_post(rubric, title, body_tg, body_vk, body_zen, body_landing, image_url=None):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO smart_calendar (rubric, title, body_tg, body_vk, body_zen, body_landing, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (rubric, title, body_tg, body_vk, body_zen, body_landing, image_url))
+    last_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return last_id
+
+def get_latest_news(limit=3):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT title, body_landing, created_at FROM smart_calendar
+        WHERE status = 'published' ORDER BY created_at DESC LIMIT ?
+    ''', (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 def get_pending_content():
     conn = sqlite3.connect(DATABASE_PATH)

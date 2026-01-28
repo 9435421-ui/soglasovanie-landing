@@ -10,6 +10,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 # VK
 VK_ACCESS_TOKEN = os.getenv("VK_ACCESS_TOKEN")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID")
+ZEN_TOKEN = os.getenv("ZEN_TOKEN")
 
 # AI (OpenRouter)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
