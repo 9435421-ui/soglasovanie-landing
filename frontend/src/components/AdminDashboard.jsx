@@ -11,6 +11,7 @@ function AdminDashboard() {
   });
   const [leads, setLeads] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [birthdays, setBirthdays] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -29,6 +30,8 @@ function AdminDashboard() {
       setLeads(leadsRes.data);
       const postsRes = await axios.get('/api/posts', config);
       setPosts(postsRes.data);
+      const bRes = await axios.get('/api/birthdays', config);
+      setBirthdays(bRes.data);
     } catch (err) {
       console.error('Data fetch error:', err);
     }
@@ -49,6 +52,19 @@ function AdminDashboard() {
           >Медиа</button>
         </div>
       </div>
+
+      {/* Birthdays Alert */}
+      {birthdays.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-4">
+          <div className="bg-amber-100 p-2 rounded-xl text-amber-600">
+            <CalendarIcon size={24} />
+          </div>
+          <div>
+            <div className="font-bold text-amber-900 text-sm">Сегодня дни рождения!</div>
+            <div className="text-xs text-amber-700">{birthdays.map(b => b.name).join(', ')}</div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4">

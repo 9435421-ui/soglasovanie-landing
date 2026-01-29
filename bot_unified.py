@@ -17,7 +17,8 @@ from config import (BOT_TOKEN, ADMIN_ID, OPENROUTER_API_KEY, CONTENT_CHANNEL_ID,
                     LEADS_GROUP_CHAT_ID, THREAD_ID_KVARTIRY, THREAD_ID_KOMMERCIA, THREAD_ID_DOMA,
                     DATABASE_PATH)
 from database import (save_lead, init_db, get_pending_content, add_content_draft,
-                      get_latest_news, add_smart_post, get_scheduled_posts, update_smart_post_status)
+                      get_latest_news, add_smart_post, get_scheduled_posts, update_smart_post_status,
+                      get_birthday_users, update_user_birthday)
 from vk_service import post_to_vk
 from zen_service import post_to_zen
 
@@ -28,10 +29,22 @@ logging.basicConfig(level=logging.INFO)
 AGENT_PROMPTS = {
     "квалификатор": "Ты Квалификатор ТЕРИОН. Твоя цель - провести пользователя через квиз, узнать город, тип объекта и телефон. Будь вежлив и краток.",
     "продавец": "Ты Продавец ТЕРИОН. Твоя цель - продать ценность услуг Юлии Пархоменко. ЖЕСТКОЕ ПРАВИЛО: НИКОГДА НЕ НАЗЫВАЙ ЦЕНЫ. Если спрашивают стоимость, говори: 'Каждый проект уникален, эксперт Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Давайте назначим консультацию?'.",
-    "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы: Telegram (кратко, кнопки), VK (средний объем, вовлечение), Яндекс.Дзен (лонгрид, SEO, подробности), Лендинг (анонс, выгода).",
-    "креативщик": "Ты Креативщик ТЕРИОН. Твоя задача - придумать 3 варианта заголовка для поста: хайповый, экспертный и поисковый (SEO).",
-    "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы для постов, которые подчеркивают экспертность в перепланировках.",
-    "дизайнер": "Ты Дизайнер ТЕРИОН. Твоя задача — создавать подробные промпты для нейросетей (DALL-E, Midjourney) для генерации обложек к постам. Стиль: минималистичный, архитектурный, профессиональный. Используй цвета #2E7D32 и #1A1A1A."
+    "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы. Рубрики: 'Советы', 'Интересные факты', 'Новости проекта', 'Поздравления'. Тон: профессиональный, доверительный. Для поздравлений - теплый и праздничный.",
+    "креативщик": "Ты Креативщик ТЕРИОН. Придумывай заголовки и идеи для постов. Помни про рубрики: факты, советы, праздники РФ.",
+    "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы. Следи за праздничным календарем РФ.",
+    "дизайнер": "Ты Дизайнер ТЕРИОН. Твоя задача — создавать промпты для генерации изображений. ВАЖНО: На изображениях НЕ ДОЛЖНО БЫТЬ ТЕКСТА. Стиль: архитектурный минимализм, интерьеры, чертежи. Цвета: #2E7D32 и #1A1A1A."
+}
+
+# Праздники РФ
+RF_HOLIDAYS = {
+    "01.01": "Новый год",
+    "07.01": "Рождество",
+    "23.02": "День защитника Отечества",
+    "08.03": "Международный женский день",
+    "01.05": "Праздник Весны и Труда",
+    "09.05": "День Победы",
+    "12.06": "День России",
+    "04.11": "День народного единства"
 }
 
 # Инициализация
@@ -63,6 +76,25 @@ async def adapt_content_all_platforms(seed_text: str):
     results["image_prompt"] = image_prompt
 
     return results
+
+async def generate_image(prompt: str):
+    """Генерация изображения через API OpenRouter (DALL-E 3)"""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+
+    # Промпт для генерации картинки через мультимодальную модель или специфичный эндпоинт
+    # Примечание: В OpenRouter генерация картинок может идти через специфичные модели
+    data = {
+        "model": "openai/dall-e-3",
+        "prompt": prompt,
+        "n": 1,
+        "size": "1024x1024"
+    }
+    # Поскольку OpenRouter в основном для чата, для DALL-E может потребоваться прямой запрос к OpenAI
+    # или использование модели, поддерживающей картинки в OpenRouter.
+    # Если OpenRouter не поддерживает прямую генерацию, оставим промпт для ручной/внешней вставки.
+    logging.info(f"Generating image with prompt: {prompt}")
+    return None # Заглушка, так как не все API OpenRouter поддерживают генерацию картинок напрямую через chat/completions
 
 async def ask_ai(prompt_type: str, user_message: str):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -188,9 +220,38 @@ async def publish_post_callback(callback: types.CallbackQuery):
     await callback.answer()
 
 async def scheduler_loop():
-    """Фоновая задача для проверки расписания"""
+    """Фоновая задача для проверки расписания и дней рождения"""
     logging.info("Scheduler started.")
+    last_birthday_check = None
+
     while True:
+        now = datetime.now()
+        today_str = now.strftime("%d.%m")
+
+        # 1. Проверка праздников и дней рождения (раз в день)
+        if last_birthday_check != today_str:
+            # Праздники
+            if today_str in RF_HOLIDAYS:
+                holiday_name = RF_HOLIDAYS[today_str]
+                logging.info(f"Holiday today: {holiday_name}")
+                holiday_post = await ask_ai("контент-менеджер", f"Напиши праздничный пост для соцсетей (ТГ, ВК) в честь праздника: {holiday_name}. Стиль профессиональный, но теплый, от лица ТЕРИОН.")
+                # Авто-черновик
+                add_smart_post("Праздники", holiday_name, holiday_post, holiday_post, holiday_post, holiday_post)
+                await bot.send_message(ADMIN_ID, f"🎉 Сегодня {holiday_name}! Я подготовил черновик поздравительного поста.")
+
+            # Дни рождения
+            logging.info(f"Checking birthdays for {today_str}")
+            users = get_birthday_users(today_str)
+            for u_id, name in users:
+                greeting = await ask_ai("контент-менеджер", f"Напиши теплое личное поздравление с днем рождения для клиента по имени {name}, от лица эксперта Юлии Пархоменко и компании ТЕРИОН.")
+                try:
+                    await bot.send_message(u_id, greeting)
+                    logging.info(f"Birthday greeting sent to {name} ({u_id})")
+                except Exception as e:
+                    logging.error(f"Failed to send birthday greeting to {u_id}: {e}")
+            last_birthday_check = today_str
+
+        # 2. Проверка расписания постов
         try:
             pending = get_scheduled_posts()
             for post in pending:
@@ -271,6 +332,18 @@ async def handle_stats_api(request):
     from database import get_stats
     return web.json_response(get_stats())
 
+async def handle_birthdays_api(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not validate_tg_init_data(auth_header, BOT_TOKEN):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    from database import get_birthday_users
+    now = datetime.now()
+    today_str = now.strftime("%d.%m")
+    users = get_birthday_users(today_str)
+    data = [{"id": u[0], "name": u[1]} for u in users]
+    return web.json_response(data)
+
 async def handle_posts_api(request):
     auth_header = request.headers.get('Authorization')
     if not auth_header or not validate_tg_init_data(auth_header, BOT_TOKEN):
@@ -295,6 +368,7 @@ async def start_web_server():
     app.router.add_get('/api/leads', handle_leads_api)
     app.router.add_get('/api/stats', handle_stats_api)
     app.router.add_get('/api/posts', handle_posts_api)
+    app.router.add_get('/api/birthdays', handle_birthdays_api)
 
     # Отдача статики фронтенда (после билда)
     if os.path.exists('frontend/dist'):

@@ -8,7 +8,7 @@ def init_db():
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
-    # Таблица лидов
+    # Таблица лидов (пользователей)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,6 +16,7 @@ def init_db():
             username TEXT,
             full_name TEXT,
             phone TEXT,
+            birthday TEXT, -- Формат DD.MM
             module TEXT,
             city TEXT,
             object_type TEXT,
@@ -110,6 +111,22 @@ def get_latest_news(limit=3):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+def get_birthday_users(day_month):
+    """day_month: string "DD.MM" """
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, full_name FROM leads WHERE birthday = ?", (day_month,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def update_user_birthday(user_id, birthday):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE leads SET birthday = ? WHERE user_id = ?", (birthday, user_id))
+    conn.commit()
+    conn.close()
 
 def get_all_leads(limit=50):
     conn = sqlite3.connect(DATABASE_PATH)
