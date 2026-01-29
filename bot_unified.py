@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 # Роли агентов
 AGENT_PROMPTS = {
     "квалификатор": "Ты Квалификатор ТЕРИОН. Твоя цель - провести пользователя через квиз, узнать город, тип объекта и телефон. Будь вежлив и краток.",
-    "продавец": "Ты Продавец ТЕРИОН. Твоя цель - продать ценность услуг Юлии Пархоменко. ЖЕСТКОЕ ПРАВИЛО: НИКОГДА НЕ НАЗЫВАЙ ЦЕНЫ. Если спрашивают стоимость, говори: 'Каждый проект уникален, эксперт Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Давайте назначим консультацию?'.",
+    "продавец": "Ты Продавец ТЕРИОН. Твоя цель - продать ценность услуг Юлии Пархоменко и получить контакт лида. ЖЕСТКОЕ ПРАВИЛО: НИКОГДА НЕ НАЗЫВАЙ ЦЕНЫ. Если спрашивают стоимость, говори: 'Каждый проект уникален, эксперт Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Давайте пройдем короткий квиз (/quiz) или назначим консультацию?'. Всегда старайся направить пользователя к расчету стоимости через квиз.",
     "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы. Рубрики: 'Советы', 'Интересные факты', 'Новости проекта', 'Поздравления'. Тон: профессиональный, доверительный. Для поздравлений - теплый и праздничный.",
     "креативщик": "Ты Креативщик ТЕРИОН. Придумывай заголовки и идеи для постов. Помни про рубрики: факты, советы, праздники РФ.",
     "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы. Следи за праздничным календарем РФ.",
@@ -53,6 +53,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 class QuizStates(StatesGroup):
+    consent = State()
     city = State()
     object_type = State()
     details = State()
@@ -416,10 +417,43 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     await message.answer("🚀 Добро пожаловать в ТЕРИОН — ваш гид по законной перепланировке!", reply_markup=kb)
 
+@dp.message(Command("quiz"))
+async def cmd_quiz(message: types.Message, state: FSMContext):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Согласен", callback_data="consent_yes")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="consent_no")]
+    ])
+    await message.answer(
+        "Перед началом нам нужно ваше согласие на обработку персональных данных в соответствии с ФЗ-152 и на получение уведомлений.\n\n"
+        "Вы согласны?",
+        reply_markup=kb
+    )
+    await state.set_state(QuizStates.consent)
+
 @dp.callback_query(F.data == "start_quiz")
 async def quiz_start(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("В каком городе находится ваш объект?")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Согласен", callback_data="consent_yes")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="consent_no")]
+    ])
+    await callback.message.answer(
+        "Перед началом нам нужно ваше согласие на обработку персональных данных в соответствии с ФЗ-152 и на получение уведомлений.\n\n"
+        "Вы согласны?",
+        reply_markup=kb
+    )
+    await state.set_state(QuizStates.consent)
+    await callback.answer()
+
+@dp.callback_query(QuizStates.consent, F.data == "consent_yes")
+async def process_consent(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Отлично! В каком городе находится ваш объект?")
     await state.set_state(QuizStates.city)
+    await callback.answer()
+
+@dp.callback_query(QuizStates.consent, F.data == "consent_no")
+async def process_consent_no(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("К сожалению, без согласия мы не сможем провести расчет. Если передумаете — нажмите /start.")
+    await state.clear()
     await callback.answer()
 
 @dp.callback_query(F.data == "ask_ai")
@@ -442,17 +476,34 @@ async def process_obj(message: types.Message, state: FSMContext):
 @dp.message(QuizStates.details)
 async def process_details(message: types.Message, state: FSMContext):
     await state.update_data(details=message.text)
-    await message.answer("Ваш номер телефона для связи с экспертом:")
+    kb = ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="📱 Поделиться контактом", request_contact=True)]
+    ], resize_keyboard=True, one_time_keyboard=True)
+    await message.answer("Ваш номер телефона для связи с экспертом. Нажмите кнопку ниже или введите вручную:", reply_markup=kb)
     await state.set_state(QuizStates.phone)
 
 @dp.message(QuizStates.phone)
 async def process_phone(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    phone = message.text
+
+    full_name = message.from_user.full_name
+    if message.contact:
+        phone = message.contact.phone_number
+        # Если в контакте имя отличается, можно обновить
+        if message.contact.first_name:
+            full_name = f"{message.contact.first_name} {message.contact.last_name or ''}".strip()
+    else:
+        phone = message.text
+
+    # Удаляем ReplyKeyboard
+    await message.answer("✅ Данные приняты!", reply_markup=types.ReplyKeyboardRemove())
+
+    profile_url = f"https://t.me/{message.from_user.username}" if message.from_user.username else f"tg://user?id={message.from_user.id}"
+
     save_lead(
         user_id=message.from_user.id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
+        username=profile_url, # Сохраняем ссылку на профиль
+        full_name=full_name,
         phone=phone,
         module="quiz",
         city=data.get("city"),
@@ -491,11 +542,13 @@ async def chat_handler(message: types.Message):
 
 async def main():
     init_db()
-    # Запуск бота, веб-сервера и планировщика параллельно
+    # Запуск бота, веб-сервера, планировщика и слушателя ВК параллельно
+    from vk_service import vk_listener_loop
     await asyncio.gather(
         dp.start_polling(bot),
         start_web_server(),
-        scheduler_loop()
+        scheduler_loop(),
+        vk_listener_loop(bot)
     )
 
 if __name__ == "__main__":

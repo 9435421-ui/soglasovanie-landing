@@ -3,6 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, CheckCircle2, Phone } from 'lucide-react';
 
 const steps = [
+  {
+    id: 'consent',
+    question: 'Согласие на обработку данных',
+    type: 'consent',
+    text: 'Для продолжения работы нам необходимо ваше согласие на обработку персональных данных в соответствии с ФЗ-152 и на получение информационных сообщений.'
+  },
   { id: 'city', question: 'В каком городе ваш объект?', type: 'text', placeholder: 'Например: Москва' },
   { id: 'type', question: 'Тип недвижимости', type: 'choice', options: ['Квартира', 'Коммерция', 'ИЖС'] },
   { id: 'details', question: 'Что планируете изменить?', type: 'textarea', placeholder: 'Например: перенос кухни или снос стены' },
@@ -69,7 +75,29 @@ function QuizView() {
         >
           <h2 className="text-2xl font-bold mb-8 text-terion-black leading-tight">{current.question}</h2>
 
-          {current.type === 'choice' ? (
+          {current.type === 'consent' ? (
+            <div className="space-y-6">
+              <p className="text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100">
+                {current.text}
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleNext(true)}
+                  className="tg-button w-full"
+                >
+                  ✅ Согласен и продолжить
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.Telegram?.WebApp) window.Telegram.WebApp.close();
+                  }}
+                  className="w-full py-3 text-gray-400 font-medium"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : current.type === 'choice' ? (
             <div className="grid gap-3">
               {current.options.map(opt => (
                 <button

@@ -17,6 +17,7 @@ def init_db():
             full_name TEXT,
             phone TEXT,
             birthday TEXT, -- Формат DD.MM
+            pd_consent INTEGER DEFAULT 0, -- Согласие на обработку ПД
             module TEXT,
             city TEXT,
             object_type TEXT,
@@ -72,13 +73,13 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_lead(user_id, username, full_name, phone, module, city, object_type, details, source):
+def save_lead(user_id, username, full_name, phone, module, city, object_type, details, source, pd_consent=1):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO leads (user_id, username, full_name, phone, module, city, object_type, details, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, username, full_name, phone, module, city, object_type, details, source))
+        INSERT INTO leads (user_id, username, full_name, phone, module, city, object_type, details, source, pd_consent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, username, full_name, phone, module, city, object_type, details, source, pd_consent))
     conn.commit()
     conn.close()
 
