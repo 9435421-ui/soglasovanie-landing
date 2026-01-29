@@ -404,6 +404,11 @@ async def cmd_start(message: types.Message, state: FSMContext):
     # Ссылка на Mini App (в продакшене будет реальный URL)
     web_app_url = "https://ternion.ru/mini-app"
 
+    # Если зашли с лендинга для квиза — сразу запускаем его
+    if "quiz" in source:
+        await cmd_quiz(message, state)
+        return
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📱 Открыть ТЕРИОН App", web_app=WebAppInfo(url=web_app_url))],
         [InlineKeyboardButton(text="📋 Начать расчет (Квиз)", callback_data="start_quiz")],
@@ -459,7 +464,10 @@ async def process_consent_no(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "ask_ai")
 async def cb_ask_ai(callback: types.CallbackQuery):
-    await callback.message.answer("Я слушаю! Задайте любой вопрос по перепланировке. Помните, что я не называю точные цены — их определит эксперт Юлия Пархоменко.")
+    await callback.message.answer(
+        "Я, Антон, ии-консультант, информацию о стоимости работ вы получите у нашего специалиста, "
+        "также в этом чате, можно оставить дополнительные вопросы, загрузить план помещения."
+    )
     await callback.answer()
 
 @dp.message(QuizStates.city)
