@@ -1,13 +1,17 @@
 import asyncio
 import logging
+import os
 import sqlite3
 import aiohttp
+import hmac
+import hashlib
+import json
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, MenuButtonWebApp
 
 from config import (BOT_TOKEN, ADMIN_ID, OPENROUTER_API_KEY, CONTENT_CHANNEL_ID,
                     LEADS_GROUP_CHAT_ID, THREAD_ID_KVARTIRY, THREAD_ID_KOMMERCIA, THREAD_ID_DOMA,
@@ -183,7 +187,23 @@ async def smart_publish_post(callback: types.CallbackQuery):
     await callback.message.answer("✅ Омни-публикация выполнена по всем каналам!")
     await callback.answer()
 
-# API для Лендинга
+def validate_tg_init_data(init_data: str, bot_token: str):
+    """Валидация данных от Telegram Mini App"""
+    try:
+        from urllib.parse import parse_qs
+        parsed = parse_qs(init_data)
+        hash_val = parsed.pop('hash', [None])[0]
+        if not hash_val: return False
+
+        data_check_string = "\n".join([f"{k}={v[0]}" for k, v in sorted(parsed.items())])
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+        return computed_hash == hash_val
+    except:
+        return False
+
+# API для Лендинга и Mini App
 async def handle_news_api(request):
     news = get_latest_news(limit=5)
     data = []
@@ -197,9 +217,34 @@ async def handle_news_api(request):
         "Access-Control-Allow-Origin": "*" # Для работы CORS с фронтенда
     })
 
+async def handle_leads_api(request):
+    # В идеале здесь проверка авторизации через initData в хедере
+    from database import get_all_leads
+    leads = get_all_leads()
+    data = []
+    for l in leads:
+        data.append({
+            "id": l[0],
+            "name": l[3],
+            "phone": l[4],
+            "type": l[7],
+            "date": l[10]
+        })
+    return web.json_response(data)
+
+async def handle_stats_api(request):
+    from database import get_stats
+    return web.json_response(get_stats())
+
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/api/news', handle_news_api)
+    app.router.add_get('/api/leads', handle_leads_api)
+    app.router.add_get('/api/stats', handle_stats_api)
+
+    # Отдача статики фронтенда (после билда)
+    if os.path.exists('frontend/dist'):
+        app.router.add_static('/', 'frontend/dist', name='static', follow_symlinks=True)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
@@ -212,10 +257,21 @@ async def cmd_start(message: types.Message, state: FSMContext):
     source = args[1] if len(args) > 1 else "direct"
     await state.update_data(source=source)
 
+    # Ссылка на Mini App (в продакшене будет реальный URL)
+    web_app_url = "https://ternion.ru/mini-app"
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📱 Открыть ТЕРИОН App", web_app=WebAppInfo(url=web_app_url))],
         [InlineKeyboardButton(text="📋 Начать расчет (Квиз)", callback_data="start_quiz")],
         [InlineKeyboardButton(text="💬 Консультация Антона", callback_data="ask_ai")]
     ])
+
+    # Установка кнопки меню
+    await bot.set_chat_menu_button(
+        chat_id=message.chat.id,
+        menu_button=MenuButtonWebApp(text="ТЕРИОН", web_app=WebAppInfo(url=web_app_url))
+    )
+
     await message.answer("🚀 Добро пожаловать в ТЕРИОН — ваш гид по законной перепланировке!", reply_markup=kb)
 
 @dp.callback_query(F.data == "start_quiz")

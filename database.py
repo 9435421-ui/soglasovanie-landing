@@ -111,6 +111,28 @@ def get_latest_news(limit=3):
     conn.close()
     return rows
 
+def get_all_leads(limit=50):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM leads ORDER BY created_at DESC LIMIT ?", (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def get_stats():
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE created_at >= datetime('now', 'start of day')")
+    leads_today = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM smart_calendar WHERE status = 'published'")
+    active_posts = cursor.fetchone()[0]
+    conn.close()
+    return {
+        "leadsToday": leads_today,
+        "activePosts": active_posts,
+        "conversion": "15%" # Заглушка, можно считать реально
+    }
+
 def get_pending_content():
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()

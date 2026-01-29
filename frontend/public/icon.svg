@@ -1,0 +1,12 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Фон -->
+  <rect width="200" height="200" rx="40" fill="#2E7D32"/>
+
+  <!-- Стилизованная буква T (как план стен) -->
+  <path d="M50 60H150V85H112.5V150H87.5V85H50V60Z" fill="white"/>
+
+  <!-- Декоративные линии "чертежа" -->
+  <line x1="50" y1="140" x2="70" y2="140" stroke="white" stroke-opacity="0.5" stroke-width="2"/>
+  <line x1="130" y1="140" x2="150" y2="140" stroke="white" stroke-opacity="0.5" stroke-width="2"/>
+  <circle cx="100" cy="100" r="70" stroke="white" stroke-opacity="0.1" stroke-width="1"/>
+</svg>
