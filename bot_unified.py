@@ -58,6 +58,7 @@ class QuizStates(StatesGroup):
     object_type = State()
     details = State()
     phone = State()
+    additional_info = State()
 
 async def adapt_content_all_platforms(seed_text: str):
     platforms = {
@@ -484,31 +485,69 @@ async def process_details(message: types.Message, state: FSMContext):
 
 @dp.message(QuizStates.phone)
 async def process_phone(message: types.Message, state: FSMContext):
-    data = await state.get_data()
+    import re
 
     full_name = message.from_user.full_name
     if message.contact:
         phone = message.contact.phone_number
-        # Если в контакте имя отличается, можно обновить
         if message.contact.first_name:
             full_name = f"{message.contact.first_name} {message.contact.last_name or ''}".strip()
     else:
-        phone = message.text
+        # Валидация ручного ввода
+        raw_phone = message.text
+        # Оставляем только цифры
+        digits = re.sub(r'\D', '', raw_phone)
+        if len(digits) < 10:
+            await message.answer("⚠️ Пожалуйста, введите корректный номер телефона (минимум 10 цифр) или воспользуйтесь кнопкой ниже:")
+            return
+        phone = raw_phone
 
-    # Удаляем ReplyKeyboard
-    await message.answer("✅ Данные приняты!", reply_markup=types.ReplyKeyboardRemove())
+    await state.update_data(phone=phone, full_name=full_name)
+
+    await message.answer(
+        f"✅ Спасибо, {full_name.split()[0]}! Контакт получен.\n\n"
+        "Вы можете прикрепить чертежи, оставить голосовое сообщение или написать дополнительные вопросы/пояснения. "
+        "Если пояснений нет — просто напишите 'Готово'.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await state.set_state(QuizStates.additional_info)
+
+@dp.message(QuizStates.additional_info, F.content_type.in_({'text', 'voice', 'document', 'photo'}))
+async def process_additional_info(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+
+    additional_text = ""
+    file_info = ""
+
+    if message.text:
+        if message.text.lower() == 'готово':
+            additional_text = "Без доп. комментариев"
+        else:
+            additional_text = message.text
+    elif message.voice:
+        additional_text = "[Голосовое сообщение]"
+        file_info = f"Voice file_id: {message.voice.file_id}"
+    elif message.document:
+        additional_text = f"[Файл: {message.document.file_name}]"
+        file_info = f"Doc file_id: {message.document.file_id}"
+    elif message.photo:
+        additional_text = "[Фото]"
+        file_info = f"Photo file_id: {message.photo[-1].file_id}"
 
     profile_url = f"https://t.me/{message.from_user.username}" if message.from_user.username else f"tg://user?id={message.from_user.id}"
 
+    # Сохраняем лид с учетом доп. инфо
+    full_details = f"Задача: {data.get('details')}\nДоп. инфо: {additional_text} {file_info}"
+
     save_lead(
         user_id=message.from_user.id,
-        username=profile_url, # Сохраняем ссылку на профиль
-        full_name=full_name,
-        phone=phone,
-        module="quiz",
+        username=profile_url,
+        full_name=data.get('full_name'),
+        phone=data.get('phone'),
+        module="quiz_v2",
         city=data.get("city"),
         object_type=data.get("object_type"),
-        details=data.get("details"),
+        details=full_details,
         source=data.get("source")
     )
 
@@ -520,19 +559,26 @@ async def process_phone(message: types.Message, state: FSMContext):
         thread_id = THREAD_ID_DOMA
 
     lead_msg = f"🚀 Новый лид (ТЕРИОН v2.0)\n\n" \
-               f"👤 Имя: {message.from_user.full_name}\n" \
-               f"📞 Телефон: {phone}\n" \
+               f"👤 Имя: {data.get('full_name')}\n" \
+               f"📞 Телефон: {data.get('phone')}\n" \
                f"📍 Город: {data.get('city')}\n" \
                f"🏠 Объект: {data.get('object_type')}\n" \
-               f"📝 Детали: {data.get('details')}\n" \
+               f"📝 Пояснения: {additional_text}\n" \
                f"🔗 Источник: {data.get('source')}"
 
     try:
         await bot.send_message(chat_id=LEADS_GROUP_CHAT_ID, message_thread_id=thread_id, text=lead_msg)
+        # Если есть файл или голос — пересылаем его отдельно в ту же ветку
+        if message.voice:
+            await bot.send_voice(LEADS_GROUP_CHAT_ID, message.voice.file_id, message_thread_id=thread_id)
+        elif message.document:
+            await bot.send_document(LEADS_GROUP_CHAT_ID, message.document.file_id, message_thread_id=thread_id)
+        elif message.photo:
+            await bot.send_photo(LEADS_GROUP_CHAT_ID, message.photo[-1].file_id, message_thread_id=thread_id)
     except Exception as e:
         logging.error(f"Error sending lead: {e}")
 
-    await message.answer("✅ Заявка принята! Эксперт ТЕРИОН свяжется с вами в рабочее время (10:00-20:00 МСК).")
+    await message.answer(f"✅ Спасибо, {data.get('full_name').split()[0]}! Заявка принята. Эксперт Юлия Пархоменко свяжется с вами в ближайшее время.")
     await state.clear()
 
 @dp.message(F.text)
