@@ -31,9 +31,10 @@ class TestBotDatabase(unittest.TestCase):
 
         leads = get_daily_leads()
         self.assertEqual(len(leads), 1)
+        # leads table: id(0), user_id(1), username(2), full_name(3), phone(4), birthday(5), pd_consent(6), consent_date(7), module(8), city(9)
         self.assertEqual(leads[0][1], 123)
         self.assertEqual(leads[0][4], "+79991234567")
-        self.assertEqual(leads[0][6], "Moscow")
+        self.assertEqual(leads[0][9], "Moscow")
 
 if __name__ == "__main__":
     unittest.main()

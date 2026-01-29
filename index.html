@@ -334,7 +334,8 @@
 <script>
     async function loadNews() {
         try {
-            const response = await fetch('/api/news');
+            // Фетчим новости с сервера бота (так как лендинг может быть на другом хостинге)
+            const response = await fetch('http://176.124.219.183:8080/api/news');
             const news = await response.json();
             const container = document.getElementById('news-container');
 
