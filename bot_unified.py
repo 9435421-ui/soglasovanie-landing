@@ -36,6 +36,20 @@ AGENT_PROMPTS = {
     "дизайнер": "Ты Дизайнер ТЕРИОН. Твоя задача — создавать промпты для генерации изображений. ВАЖНО: На изображениях НЕ ДОЛЖНО БЫТЬ ТЕКСТА. Стиль: архитектурный минимализм, интерьеры, чертежи. Цвета: #2E7D32 и #1A1A1A."
 }
 
+def get_working_hours_status():
+    """Проверка рабочего времени: Пн-Пт, 09:00-19:00 МСК"""
+    # МСК - это UTC+3
+    from datetime import timedelta, timezone
+    msk_tz = timezone(timedelta(hours=3))
+    now = datetime.now(msk_tz)
+
+    is_weekday = now.weekday() < 5 # 0-4 это Пн-Пт
+    is_working_hour = 9 <= now.hour < 19
+
+    if is_weekday and is_working_hour:
+        return True
+    return False
+
 # Праздники РФ
 RF_HOLIDAYS = {
     "01.01": "Новый год",
@@ -54,10 +68,11 @@ dp = Dispatcher()
 
 class QuizStates(StatesGroup):
     consent = State()
-    city = State()
-    object_type = State()
-    details = State()
-    phone = State()
+    geography = State()
+    property_type = State()
+    floors = State()
+    project_status = State()
+    documentation = State()
     additional_info = State()
 
 async def adapt_content_all_platforms(seed_text: str):
@@ -308,7 +323,13 @@ def validate_tg_init_data(init_data: str, bot_token: str):
     except:
         return False
 
-# API для Лендинга и Mini App
+# Обработчики для статики и API
+async def handle_index(request):
+    if os.path.exists('index.html'):
+        with open('index.html', 'r', encoding='utf-8') as f:
+            return web.Response(text=f.read(), content_type='text/html')
+    return web.Response(text="Landing page not found", status=404)
+
 async def handle_news_api(request):
     news = get_latest_news(limit=5)
     data = []
@@ -380,6 +401,7 @@ async def handle_posts_api(request):
 
 async def start_web_server():
     app = web.Application()
+    app.router.add_get('/', handle_index)
     app.router.add_get('/api/news', handle_news_api)
     app.router.add_get('/api/leads', handle_leads_api)
     app.router.add_get('/api/stats', handle_stats_api)
@@ -411,18 +433,15 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
 
     # Приветствие Антона
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Принимаю условия и начинаю", callback_data="consent_yes")],
-        [InlineKeyboardButton(text="📖 Политика конфиденциальности", callback_data="show_privacy")]
-    ])
+    kb = ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="✅ Согласен и отправить номер телефона", request_contact=True)],
+        [KeyboardButton(text="📖 Политика конфиденциальности")]
+    ], resize_keyboard=True, one_time_keyboard=True)
 
     welcome_text = (
         "Здравствуйте. Меня зовут Антон, я ИИ-помощник в системе ТЕРИОН. 🏛️\n\n"
-        "Я помогу вам подготовить данные для анализа вашего объекта и передать их нашим специалистам.\n\n"
-        "Чтобы продолжить, мне необходимо ваше согласие на:\n"
-        "✅ Обработку персональных данных (согласно ФЗ-152).\n"
-        "✅ Получение уведомлений о статусе вашего запроса и информационных сообщений от ТЕРИОН.\n\n"
-        "Нажимая кнопку ниже, вы подтверждаете свое согласие с политикой конфиденциальности и условиями сервиса."
+        "Чтобы начать анализ вашего объекта и получить консультацию нашего эксперта, "
+        "пожалуйста, подтвердите согласие на обработку данных и поделитесь контактом, нажав кнопку ниже."
     )
 
     await message.answer(welcome_text, reply_markup=kb)
@@ -465,17 +484,39 @@ async def quiz_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(QuizStates.consent)
     await callback.answer()
 
-@dp.callback_query(QuizStates.consent, F.data == "consent_yes")
-async def process_consent(callback: types.CallbackQuery, state: FSMContext):
-    # Фиксируем дату согласия (в реальной БД можно добавить поле)
-    await state.update_data(consent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+@dp.message(QuizStates.consent, F.text == "📖 Политика конфиденциальности")
+async def process_privacy_btn(message: types.Message):
+    await cmd_privacy(message)
 
-    await callback.message.edit_text(
-        "Отлично! Начнем консультацию.\n\n"
-        "В каком городе находится ваш объект?"
+@dp.message(QuizStates.consent, F.contact | (F.text == "✅ Согласен и отправить номер телефона"))
+async def process_consent(message: types.Message, state: FSMContext):
+    if not message.contact:
+        # Если пришел текст, который не является кнопкой политики, просим контакт
+        if message.text != "📖 Политика конфиденциальности":
+            await message.answer("⚠️ Пожалуйста, подтвердите согласие и отправьте контакт кнопкой ниже, чтобы мы могли начать.")
+        return
+
+    phone = message.contact.phone_number
+    full_name = f"{message.contact.first_name} {message.contact.last_name or ''}".strip()
+
+    await state.update_data(
+        phone=phone,
+        full_name=full_name,
+        consent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
-    await state.set_state(QuizStates.city)
-    await callback.answer()
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Москва", callback_data="geo_moscow")],
+        [InlineKeyboardButton(text="Московская область", callback_data="geo_mo")],
+        [InlineKeyboardButton(text="Другой регион", callback_data="geo_other")]
+    ])
+
+    await message.answer(
+        "Благодарю. Для учета местных строительных норм и регламентов администраций (МЖИ и др.) уточните:\n\n"
+        "В каком городе или регионе находится ваш объект?",
+        reply_markup=kb
+    )
+    await state.set_state(QuizStates.geography)
 
 @dp.callback_query(QuizStates.consent, F.data == "consent_no")
 async def process_consent_no(callback: types.CallbackQuery, state: FSMContext):
@@ -491,73 +532,99 @@ async def cb_ask_ai(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-@dp.message(QuizStates.city)
-async def process_city(message: types.Message, state: FSMContext):
-    await state.update_data(city=message.text)
-    await message.answer("Тип объекта (Квартира/Коммерция/ИЖС)?")
-    await state.set_state(QuizStates.object_type)
+@dp.callback_query(QuizStates.geography, F.data.startswith("geo_"))
+async def process_geography(callback: types.CallbackQuery, state: FSMContext):
+    geo_map = {"geo_moscow": "Москва", "geo_mo": "Московская область", "geo_other": "Другой регион"}
+    geo = geo_map.get(callback.data, "Не указан")
+    await state.update_data(geography=geo)
 
-@dp.message(QuizStates.object_type)
-async def process_obj(message: types.Message, state: FSMContext):
-    await state.update_data(object_type=message.text)
-    await message.answer(
-        "Пожалуйста, пришлите план БТИ или набросок от руки. "
-        "Я передам его нашим специалистам для детального анализа планировочных решений.\n\n"
-        "Если плана под рукой нет, просто опишите задачу текстом или запишите голосовое сообщение (я расшифрую его):"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Квартира в новостройке", callback_data="type_new")],
+        [InlineKeyboardButton(text="Вторичное жилье", callback_data="type_old")],
+        [InlineKeyboardButton(text="Коммерческое помещение", callback_data="type_comm")],
+        [InlineKeyboardButton(text="Частный дом", callback_data="type_house")]
+    ])
+
+    await callback.message.edit_text(
+        "Укажите тип объекта для определения сложности проекта:",
+        reply_markup=kb
     )
-    await state.set_state(QuizStates.details)
+    await state.set_state(QuizStates.property_type)
+    await callback.answer()
 
-@dp.message(QuizStates.details, F.content_type.in_({'text', 'voice', 'document', 'photo'}))
-async def process_details(message: types.Message, state: FSMContext):
-    # Обработка медиа на этапе описания задачи
-    details_text = ""
-    if message.text:
-        details_text = message.text
-    elif message.voice:
-        details_text = "[Голосовое описание]"
-        # В реальной версии здесь был бы вызов speech-to-text
-    elif message.document:
-        details_text = f"[Прикреплен план: {message.document.file_name}]"
-    elif message.photo:
-        details_text = "[Прикреплено фото плана]"
+@dp.callback_query(QuizStates.property_type, F.data.startswith("type_"))
+async def process_property_type(callback: types.CallbackQuery, state: FSMContext):
+    type_map = {
+        "type_new": "Квартира в новостройке",
+        "type_old": "Вторичное жилье",
+        "type_comm": "Коммерческое помещение",
+        "type_house": "Частный дом"
+    }
+    p_type = type_map.get(callback.data, "Не указан")
+    await state.update_data(property_type=p_type)
 
-    await state.update_data(details=details_text)
+    await callback.message.edit_text(
+        "Это важно для расчета нагрузки на перекрытия. На каком этаже объект и сколько всего этажей в доме?\n\n"
+        "(Пример ввода: 5/17)"
+    )
+    await state.set_state(QuizStates.floors)
+    await callback.answer()
 
-    kb = ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📱 Поделиться контактом", request_contact=True)]
-    ], resize_keyboard=True, one_time_keyboard=True)
+@dp.message(QuizStates.floors)
+async def process_floors(message: types.Message, state: FSMContext):
+    await state.update_data(floors=message.text)
 
-    await message.answer("Ваш номер телефона для связи с экспертом. Нажмите кнопку ниже или введите вручную:", reply_markup=kb)
-    await state.set_state(QuizStates.phone)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Только планирую работы", callback_data="status_plan")],
+        [InlineKeyboardButton(text="Уже выполнены (легализация)", callback_data="status_done")],
+        [InlineKeyboardButton(text="В процессе ремонта", callback_data="status_process")]
+    ])
 
-@dp.message(QuizStates.phone)
-async def process_phone(message: types.Message, state: FSMContext):
-    import re
+    await message.answer(
+        "На каком этапе находится ваш проект?",
+        reply_markup=kb
+    )
+    await state.set_state(QuizStates.project_status)
 
-    full_name = message.from_user.full_name
-    if message.contact:
-        phone = message.contact.phone_number
-        if message.contact.first_name:
-            full_name = f"{message.contact.first_name} {message.contact.last_name or ''}".strip()
+@dp.callback_query(QuizStates.project_status, F.data.startswith("status_"))
+async def process_project_status(callback: types.CallbackQuery, state: FSMContext):
+    status_map = {
+        "status_plan": "Только планирую работы",
+        "status_done": "Уже выполнены (легализация)",
+        "status_process": "В процессе ремонта"
+    }
+    status = status_map.get(callback.data, "Не указан")
+    await state.update_data(project_status=status)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Да, сейчас пришлю", callback_data="doc_yes")],
+        [InlineKeyboardButton(text="❌ Нет плана", callback_data="doc_no")],
+        [InlineKeyboardButton(text="✏️ Есть только набросок", callback_data="doc_sketch")]
+    ])
+
+    await callback.message.edit_text(
+        "Есть ли у вас на руках план помещения (БТИ, технический паспорт или эскиз)?",
+        reply_markup=kb
+    )
+    await state.set_state(QuizStates.documentation)
+    await callback.answer()
+
+@dp.callback_query(QuizStates.documentation, F.data.startswith("doc_"))
+async def process_documentation_choice(callback: types.CallbackQuery, state: FSMContext):
+    doc_map = {"doc_yes": "✅ Да, сейчас пришлю", "doc_no": "❌ Нет плана", "doc_sketch": "✏️ Есть только набросок"}
+    choice = doc_map.get(callback.data)
+    await state.update_data(documentation_choice=choice)
+
+    if callback.data in ["doc_yes", "doc_sketch"]:
+        await callback.message.edit_text("Пожалуйста, прикрепите файл или фото (план/набросок) следующим сообщением.")
     else:
-        # Валидация ручного ввода
-        raw_phone = message.text
-        # Оставляем только цифры
-        digits = re.sub(r'\D', '', raw_phone)
-        if len(digits) < 10:
-            await message.answer("⚠️ Пожалуйста, введите корректный номер телефона (минимум 10 цифр) или воспользуйтесь кнопкой ниже:")
-            return
-        phone = raw_phone
+        await callback.message.edit_text(
+            "Принято. Если у вас остались вопросы или комментарии, напишите их ниже — я добавлю их к вашей карточке.\n\n"
+            "Если вопросов нет — просто напишите 'Готово'."
+        )
 
-    await state.update_data(phone=phone, full_name=full_name)
-
-    await message.answer(
-        f"✅ Спасибо, {full_name.split()[0]}! Контакт получен.\n\n"
-        "Вы можете прикрепить чертежи, оставить голосовое сообщение или написать дополнительные вопросы/пояснения. "
-        "Если пояснений нет — просто напишите 'Готово'.",
-        reply_markup=types.ReplyKeyboardRemove()
-    )
     await state.set_state(QuizStates.additional_info)
+    await callback.answer()
 
 @dp.message(QuizStates.additional_info, F.content_type.in_({'text', 'voice', 'document', 'photo'}))
 async def process_additional_info(message: types.Message, state: FSMContext):
@@ -583,18 +650,25 @@ async def process_additional_info(message: types.Message, state: FSMContext):
 
     profile_url = f"https://t.me/{message.from_user.username}" if message.from_user.username else f"tg://user?id={message.from_user.id}"
 
-    # Сохраняем лид с учетом доп. инфо
-    full_details = f"Задача: {data.get('details')}\nДоп. инфо: {additional_text} {file_info}"
+    # Формируем полную карточку объекта
+    card_details = (
+        f"📍 География: {data.get('geography')}\n"
+        f"🏠 Тип объекта: {data.get('property_type')}\n"
+        f"🏢 Этажность: {data.get('floors')}\n"
+        f"🛠 Статус: {data.get('project_status')}\n"
+        f"📑 Наличие плана: {data.get('documentation_choice')}\n"
+        f"📝 Доп. вопросы: {additional_text}"
+    )
 
     save_lead(
         user_id=message.from_user.id,
         username=profile_url,
         full_name=data.get('full_name'),
         phone=data.get('phone'),
-        module="quiz_v2",
-        city=data.get("city"),
-        object_type=data.get("object_type"),
-        details=full_details,
+        module="quiz_v3",
+        city=data.get("geography"),
+        object_type=data.get("property_type"),
+        details=card_details,
         source=data.get("source"),
         pd_consent=1,
         consent_date=data.get('consent_date')
@@ -602,22 +676,19 @@ async def process_additional_info(message: types.Message, state: FSMContext):
 
     # Уведомление в группу
     thread_id = THREAD_ID_KVARTIRY
-    if data.get("object_type") == "Коммерция":
+    if data.get("property_type") == "Коммерческое помещение":
         thread_id = THREAD_ID_KOMMERCIA
-    elif data.get("object_type") == "ИЖС":
+    elif data.get("property_type") == "Частный дом":
         thread_id = THREAD_ID_DOMA
 
-    lead_msg = f"🚀 Новый лид (ТЕРИОН v2.0)\n\n" \
+    lead_msg = f"🚀 Новый лид (ТЕРИОН v2.1)\n\n" \
                f"👤 Имя: {data.get('full_name')}\n" \
                f"📞 Телефон: {data.get('phone')}\n" \
-               f"📍 Город: {data.get('city')}\n" \
-               f"🏠 Объект: {data.get('object_type')}\n" \
-               f"📝 Пояснения: {additional_text}\n" \
+               f"📋 КАРТОЧКА ОБЪЕКТА:\n{card_details}\n\n" \
                f"🔗 Источник: {data.get('source')}"
 
     try:
         await bot.send_message(chat_id=LEADS_GROUP_CHAT_ID, message_thread_id=thread_id, text=lead_msg)
-        # Если есть файл или голос — пересылаем его отдельно в ту же ветку
         if message.voice:
             await bot.send_voice(LEADS_GROUP_CHAT_ID, message.voice.file_id, message_thread_id=thread_id)
         elif message.document:
@@ -627,13 +698,16 @@ async def process_additional_info(message: types.Message, state: FSMContext):
     except Exception as e:
         logging.error(f"Error sending lead: {e}")
 
+    # Проверка рабочего времени
+    is_working = get_working_hours_status()
+    work_time_msg = ""
+    if not is_working:
+        work_time_msg = "\n\n🕘 Наши рабочие часы: Пн-Пт, с 09:00 до 19:00 (МСК). Если сейчас нерабочее время, мы обработаем вашу заявку первым делом в ближайший рабочий день."
+
     # Заключительная часть от Антона
     final_text = (
-        f"Спасибо! Я собрал все необходимые данные.\n\n"
-        f"**Что будет дальше:**\n\n"
-        f"1. Я передаю ваш запрос нашему профильному специалисту.\n"
-        f"2. После изучения документов наш эксперт свяжется с вами по номеру {data.get('phone')}, "
-        f"чтобы обсудить легализацию вашего проекта.\n\n"
+        f"Я записал ваши ответы и передал их нашим специалистам.\n\n"
+        f"**Что дальше:** Наш эксперт свяжется с вами по номеру {data.get('phone')} для подробной консультации.{work_time_msg}\n\n"
         f"Я всегда на связи, если у вас появятся дополнительные вопросы.\n"
         f"Ваш Антон, ТЕРИОН."
     )
