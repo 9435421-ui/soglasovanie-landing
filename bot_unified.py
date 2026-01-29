@@ -641,6 +641,94 @@ async def process_additional_info(message: types.Message, state: FSMContext):
     await message.answer(final_text, parse_mode="Markdown")
     await state.clear()
 
+@dp.message(F.photo, F.from_user.id == ADMIN_ID)
+async def admin_photo_content_handler(message: types.Message, state: FSMContext):
+    """Захват фото-контента от админа для создания поста"""
+    photo = message.photo[-1]
+    caption = message.caption or "Без описания"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🪄 Адаптировать ИИ для всех платформ", callback_data="admin_adapt_media")],
+        [InlineKeyboardButton(text="❌ Удалить", callback_data="admin_cancel_media")]
+    ])
+
+    await state.update_data(temp_media_id=photo.file_id, temp_caption=caption)
+    await message.reply(f"📸 Фото получено! Описание: {caption}\nХотите превратить это в пост для всех соцсетей?", reply_markup=kb)
+
+@dp.callback_query(F.data == "admin_adapt_media", F.from_user.id == ADMIN_ID)
+async def cb_admin_adapt_media(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    seed_text = data.get('temp_caption')
+    media_id = data.get('temp_media_id')
+
+    await callback.message.edit_text("⏳ ИИ ТЕРИОН готовит омни-канальный контент...")
+
+    adapted = await adapt_content_all_platforms(seed_text)
+
+    # Сохраняем черновик в Медиа-Хаб
+    smart_id = add_smart_post(
+        rubric="Репортаж",
+        title=adapted['titles'].split('\n')[0][:50],
+        body_tg=adapted['tg'],
+        body_vk=adapted['vk'],
+        body_zen=adapted['zen'],
+        body_landing=adapted['landing'],
+        image_url=media_id # Здесь file_id для ТГ
+    )
+
+    report = f"✅ Контент готов!\n\n📢 TG: {adapted['tg'][:60]}...\n👥 VK: {adapted['vk'][:60]}...\n📝 Zen: {adapted['zen'][:60]}..."
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 Опубликовать сейчас", callback_data=f"smart_pub_now_{smart_id}")],
+        [InlineKeyboardButton(text="📅 В расписание (через час)", callback_data=f"smart_sched_{smart_id}")],
+        [InlineKeyboardButton(text="✍️ Править", callback_data=f"smart_edit_{smart_id}")]
+    ])
+
+    await callback.message.answer(report, reply_markup=kb)
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("smart_pub_now_"), F.from_user.id == ADMIN_ID)
+async def cb_smart_pub_now(callback: types.CallbackQuery):
+    smart_id = callback.data.split("_")[-1]
+
+    # В реальной БД мы бы достали данные по smart_id
+    # Для теста имитируем успех
+    await callback.message.edit_text("🚀 Запущена омни-публикация по всем каналам...")
+
+    # Получаем данные из БД (логика для полноценной работы)
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute("SELECT title, body_tg, body_vk, body_zen, body_landing, image_url FROM smart_calendar WHERE id=?", (smart_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row:
+        title, b_tg, b_vk, b_zen, b_land, img = row
+        report = await execute_omni_publish(title, b_tg, b_vk, b_zen, b_land, img)
+        update_smart_post_status(smart_id, 'published')
+        await callback.message.answer(f"Результат:\n{report}")
+    else:
+        await callback.message.answer("❌ Ошибка: пост не найден в базе.")
+
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("smart_sched_"), F.from_user.id == ADMIN_ID)
+async def cb_smart_sched(callback: types.CallbackQuery):
+    smart_id = callback.data.split("_")[-1]
+
+    # Планируем на +1 час от текущего времени
+    from datetime import timedelta
+    sched_time = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE smart_calendar SET status='scheduled', scheduled_at=? WHERE id=?", (sched_time, smart_id))
+    conn.commit()
+    conn.close()
+
+    await callback.message.edit_text(f"📅 Пост поставлен в очередь на {sched_time}")
+    await callback.answer()
+
 @dp.message(F.text)
 async def chat_handler(message: types.Message):
     response = await ask_ai("продавец", message.text)
