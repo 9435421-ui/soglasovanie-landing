@@ -6,6 +6,7 @@ import aiohttp
 import hmac
 import hashlib
 import json
+from datetime import datetime
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -124,9 +125,22 @@ async def cmd_admin(message: types.Message):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Черновики постов", callback_data="admin_content")],
-        [InlineKeyboardButton(text="📊 Статистика лидов", callback_data="admin_stats")]
+        [InlineKeyboardButton(text="📊 Статистика лидов", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="🧹 Очистка и оптимизация", callback_data="admin_cleanup")]
     ])
     await message.answer("🛠 Панель управления ТЕРИОН", reply_markup=kb)
+
+@dp.callback_query(F.data == "admin_cleanup")
+async def admin_cleanup(callback: types.CallbackQuery):
+    from database import optimize_db
+    await callback.message.answer("⏳ Начинаю оптимизацию базы данных...")
+    try:
+        optimize_db()
+        await callback.message.answer("✅ База данных оптимизирована! Лишнее место освобождено.")
+    except Exception as e:
+        logging.error(f"Cleanup Error: {e}")
+        await callback.message.answer("❌ Ошибка при оптимизации.")
+    await callback.answer()
 
 @dp.callback_query(F.data == "admin_content")
 async def admin_content(callback: types.CallbackQuery):

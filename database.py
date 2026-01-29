@@ -112,6 +112,13 @@ def get_latest_news(limit=3):
     conn.close()
     return rows
 
+def optimize_db():
+    """Сжатие базы данных для освобождения места"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.execute("VACUUM")
+    conn.close()
+    print(f"Database {DATABASE_PATH} optimized.")
+
 def get_birthday_users(day_month):
     """day_month: string "DD.MM" """
     conn = sqlite3.connect(DATABASE_PATH)
