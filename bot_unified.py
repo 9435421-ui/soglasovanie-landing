@@ -75,6 +75,12 @@ class QuizStates(StatesGroup):
     documentation = State()
     additional_info = State()
 
+class PostStates(StatesGroup):
+    choosing_rubric = State()
+    writing_text = State()
+
+RUBRICS = ["Советы эксперта", "Новости проекта", "Интересные факты", "Кейсы"]
+
 async def adapt_content_all_platforms(seed_text: str):
     platforms = {
         "tg": "Адаптируй этот текст для Telegram: кратко, с эмодзи, структурированно.",
@@ -141,11 +147,74 @@ async def cmd_admin(message: types.Message):
         return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Черновики постов", callback_data="admin_content")],
+        [InlineKeyboardButton(text="✍️ Создать новый пост", callback_data="admin_create_post")],
+        [InlineKeyboardButton(text="📝 Черновики/Адаптация", callback_data="admin_content")],
         [InlineKeyboardButton(text="📊 Статистика лидов", callback_data="admin_stats")],
         [InlineKeyboardButton(text="🧹 Очистка и оптимизация", callback_data="admin_cleanup")]
     ])
-    await message.answer("🛠 Панель управления ТЕРИОН", reply_markup=kb)
+    await message.answer("🛠 Панель управления ТЕРИОН. Выберите действие:", reply_markup=kb)
+
+@dp.callback_query(F.data == "admin_create_post")
+async def admin_create_post(callback: types.CallbackQuery, state: FSMContext):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=r, callback_data=f"rubric_{i}")] for i, r in enumerate(RUBRICS)
+    ])
+    await callback.message.edit_text("Выберите рубрику для нового контента:", reply_markup=kb)
+    await state.set_state(PostStates.choosing_rubric)
+    await callback.answer()
+
+@dp.callback_query(PostStates.choosing_rubric, F.data.startswith("rubric_"))
+async def process_rubric(callback: types.CallbackQuery, state: FSMContext):
+    rubric_idx = int(callback.data.split("_")[1])
+    rubric = RUBRICS[rubric_idx]
+    await state.update_data(chosen_rubric=rubric)
+    await callback.message.edit_text(f"Рубрика: {rubric}. Пришлите текст поста или описание идеи. ИИ ТЕРИОН адаптирует его для всех каналов.")
+    await state.set_state(PostStates.writing_text)
+    await callback.answer()
+
+@dp.message(PostStates.writing_text, F.text)
+async def process_post_text(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    rubric = data.get('chosen_rubric')
+    seed_text = message.text
+
+    msg = await message.answer("⏳ ИИ ТЕРИОН анализирует текст и готовит публикации...")
+    adapted = await adapt_content_all_platforms(seed_text)
+
+    smart_id = add_smart_post(
+        rubric=rubric,
+        title=adapted['titles'].split('\n')[0][:50],
+        body_tg=adapted['tg'],
+        body_vk=adapted['vk'],
+        body_zen=adapted['zen'],
+        body_landing=adapted['landing']
+    )
+
+    report = f"✅ Контент готов (Рубрика: {rubric})!\n\n" \
+             f"📢 TG: {adapted['tg'][:50]}...\n" \
+             f"👥 VK: {adapted['vk'][:50]}...\n" \
+             f"📝 Zen: {adapted['zen'][:50]}..."
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 Опубликовать сейчас", callback_data=f"smart_pub_now_{smart_id}")],
+        [InlineKeyboardButton(text="📅 В расписание", callback_data=f"smart_sched_{smart_id}")]
+    ])
+    await msg.edit_text(report, reply_markup=kb)
+    await state.clear()
+
+@dp.callback_query(F.data == "admin_stats")
+async def admin_stats_callback(callback: types.CallbackQuery):
+    from database import get_stats
+    stats = get_stats()
+    text = (
+        f"📊 **Статистика ТЕРИОН**\n\n"
+        f"👥 Лидов за сегодня: {stats['leadsToday']}\n"
+        f"📢 Опубликовано постов: {stats['activePosts']}\n"
+        f"📈 Конверсия квиза: {stats['conversion']}\n\n"
+        f"Все данные также доступны в Mini App."
+    )
+    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()
 
 @dp.callback_query(F.data == "admin_cleanup")
 async def admin_cleanup(callback: types.CallbackQuery):
@@ -330,6 +399,14 @@ async def handle_index(request):
             return web.Response(text=f.read(), content_type='text/html')
     return web.Response(text="Landing page not found", status=404)
 
+async def handle_mini_app(request):
+    # Отдаем index.html из билда фронтенда для всех путей Mini App
+    dist_path = 'frontend/dist/index.html'
+    if os.path.exists(dist_path):
+        with open(dist_path, 'r', encoding='utf-8') as f:
+            return web.Response(text=f.read(), content_type='text/html')
+    return web.Response(text="Mini App build not found. Please run build first.", status=404)
+
 async def handle_news_api(request):
     news = get_latest_news(limit=5)
     data = []
@@ -402,15 +479,16 @@ async def handle_posts_api(request):
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle_index)
+    app.router.add_get('/mini-app', handle_mini_app)
     app.router.add_get('/api/news', handle_news_api)
     app.router.add_get('/api/leads', handle_leads_api)
     app.router.add_get('/api/stats', handle_stats_api)
     app.router.add_get('/api/posts', handle_posts_api)
     app.router.add_get('/api/birthdays', handle_birthdays_api)
 
-    # Отдача статики фронтенда (после билда)
+    # Отдача статики фронтенда
     if os.path.exists('frontend/dist'):
-        app.router.add_static('/', 'frontend/dist', name='static', follow_symlinks=True)
+        app.router.add_static('/assets', 'frontend/dist/assets', name='static')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
@@ -423,29 +501,69 @@ async def cmd_start(message: types.Message, state: FSMContext):
     source = args[1] if len(args) > 1 else "direct"
     await state.update_data(source=source)
 
-    # Ссылка на Mini App (в продакшене будет реальный URL)
+    # URL Mini App
     web_app_url = "https://ternion.ru/mini-app"
 
-    # Установка кнопки меню
-    await bot.set_chat_menu_button(
-        chat_id=message.chat.id,
-        menu_button=MenuButtonWebApp(text="ТЕРИОН", web_app=WebAppInfo(url=web_app_url))
-    )
+    # Установка кнопки меню Mini App
+    try:
+        await bot.set_chat_menu_button(
+            chat_id=message.chat.id,
+            menu_button=MenuButtonWebApp(text="ТЕРИОН", web_app=WebAppInfo(url=web_app_url))
+        )
+    except Exception as e:
+        logging.error(f"Menu button error: {e}")
 
-    # Приветствие Антона
+    # Главное меню (ReplyKeyboardMarkup)
+    main_kb_list = [
+        [KeyboardButton(text="📊 Рассчитать стоимость (Квиз)")],
+        [KeyboardButton(text="🤖 Задать вопрос Антону")]
+    ]
+
+    if message.from_user.id == ADMIN_ID:
+        main_kb_list.append([KeyboardButton(text="🛠 Панель управления")])
+
+    main_kb = ReplyKeyboardMarkup(keyboard=main_kb_list, resize_keyboard=True)
+
+    if source == "quiz_land" or source == "quiz":
+        # Если пришли с лендинга сразу на квиз
+        welcome_text = (
+            "Здравствуйте! Я Антон, ИИ ТЕРИОН. 🏛️\n"
+            "Вижу, вы хотите рассчитать стоимость согласования.\n\n"
+            "Пожалуйста, нажмите кнопку ниже, чтобы подтвердить согласие с политикой и отправить контакт для связи."
+        )
+        kb = ReplyKeyboardMarkup(keyboard=[
+            [KeyboardButton(text="✅ Согласен и отправить телефон", request_contact=True)],
+            [KeyboardButton(text="📖 Политика конфиденциальности")]
+        ], resize_keyboard=True, one_time_keyboard=True)
+        await message.answer(welcome_text, reply_markup=kb)
+        await state.set_state(QuizStates.consent)
+    else:
+        welcome_text = (
+            "Добро пожаловать в ТЕРИОН! 🏛️\n\n"
+            "Я помогу вам разобраться с перепланировкой, рассчитать стоимость и подготовить документы.\n\n"
+            "Выберите нужное действие в меню ниже:"
+        )
+        await message.answer(welcome_text, reply_markup=main_kb)
+
+@dp.message(F.text == "🛠 Панель управления", F.from_user.id == ADMIN_ID)
+async def admin_menu_btn(message: types.Message):
+    await cmd_admin(message)
+
+@dp.message(F.text == "📊 Рассчитать стоимость (Квиз)")
+async def menu_quiz(message: types.Message, state: FSMContext):
     kb = ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="✅ Согласен и отправить номер телефона", request_contact=True)],
+        [KeyboardButton(text="✅ Согласен и отправить телефон", request_contact=True)],
         [KeyboardButton(text="📖 Политика конфиденциальности")]
     ], resize_keyboard=True, one_time_keyboard=True)
-
-    welcome_text = (
-        "Здравствуйте. Меня зовут Антон, я ИИ-помощник в системе ТЕРИОН. 🏛️\n\n"
-        "Чтобы начать анализ вашего объекта и получить консультацию нашего эксперта, "
-        "пожалуйста, подтвердите согласие на обработку данных и поделитесь контактом, нажав кнопку ниже."
+    await message.answer(
+        "Для расчета стоимости нам нужно ваше согласие на обработку данных (ФЗ-152) и контакт для связи с экспертом.",
+        reply_markup=kb
     )
-
-    await message.answer(welcome_text, reply_markup=kb)
     await state.set_state(QuizStates.consent)
+
+@dp.message(F.text == "🤖 Задать вопрос Антону")
+async def menu_ask_ai(message: types.Message):
+    await message.answer("Я слушаю! Напишите ваш вопрос о перепланировке, и я постараюсь ответить.")
 
 @dp.message(Command("quiz"))
 async def cmd_quiz(message: types.Message, state: FSMContext):
@@ -488,7 +606,7 @@ async def quiz_start(callback: types.CallbackQuery, state: FSMContext):
 async def process_privacy_btn(message: types.Message):
     await cmd_privacy(message)
 
-@dp.message(QuizStates.consent, F.contact | (F.text == "✅ Согласен и отправить номер телефона"))
+@dp.message(QuizStates.consent, F.contact | (F.text.in_({"✅ Согласен и отправить номер телефона", "✅ Согласен и отправить телефон"})))
 async def process_consent(message: types.Message, state: FSMContext):
     if not message.contact:
         # Если пришел текст, который не является кнопкой политики, просим контакт
@@ -518,11 +636,12 @@ async def process_consent(message: types.Message, state: FSMContext):
     )
     await state.set_state(QuizStates.geography)
 
-@dp.callback_query(QuizStates.consent, F.data == "consent_no")
-async def process_consent_no(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("К сожалению, без согласия мы не сможем провести расчет. Если передумаете — нажмите /start.")
-    await state.clear()
-    await callback.answer()
+@dp.message(QuizStates.consent)
+async def process_consent_fallback(message: types.Message):
+    await message.answer(
+        "⚠️ Чтобы начать, пожалуйста, нажмите кнопку **'✅ Согласен и отправить телефон'** в меню ниже.\n\n"
+        "Это необходимо для соблюдения закона ФЗ-152 о персональных данных."
+    )
 
 @dp.callback_query(F.data == "ask_ai")
 async def cb_ask_ai(callback: types.CallbackQuery):
