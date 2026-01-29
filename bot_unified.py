@@ -16,7 +16,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 from config import (BOT_TOKEN, ADMIN_ID, OPENROUTER_API_KEY, CONTENT_CHANNEL_ID,
                     LEADS_GROUP_CHAT_ID, THREAD_ID_KVARTIRY, THREAD_ID_KOMMERCIA, THREAD_ID_DOMA,
                     DATABASE_PATH)
-from database import save_lead, init_db, get_pending_content, add_content_draft, get_latest_news, add_smart_post
+from database import (save_lead, init_db, get_pending_content, add_content_draft,
+                      get_latest_news, add_smart_post, get_scheduled_posts, update_smart_post_status)
 from vk_service import post_to_vk
 from zen_service import post_to_zen
 
@@ -29,7 +30,8 @@ AGENT_PROMPTS = {
     "продавец": "Ты Продавец ТЕРИОН. Твоя цель - продать ценность услуг Юлии Пархоменко. ЖЕСТКОЕ ПРАВИЛО: НИКОГДА НЕ НАЗЫВАЙ ЦЕНЫ. Если спрашивают стоимость, говори: 'Каждый проект уникален, эксперт Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Давайте назначим консультацию?'.",
     "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы: Telegram (кратко, кнопки), VK (средний объем, вовлечение), Яндекс.Дзен (лонгрид, SEO, подробности), Лендинг (анонс, выгода).",
     "креативщик": "Ты Креативщик ТЕРИОН. Твоя задача - придумать 3 варианта заголовка для поста: хайповый, экспертный и поисковый (SEO).",
-    "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы для постов, которые подчеркивают экспертность в перепланировках."
+    "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы для постов, которые подчеркивают экспертность в перепланировках.",
+    "дизайнер": "Ты Дизайнер ТЕРИОН. Твоя задача — создавать подробные промпты для нейросетей (DALL-E, Midjourney) для генерации обложек к постам. Стиль: минималистичный, архитектурный, профессиональный. Используй цвета #2E7D32 и #1A1A1A."
 }
 
 # Инициализация
@@ -55,6 +57,11 @@ async def adapt_content_all_platforms(seed_text: str):
 
     titles = await ask_ai("креативщик", f"Придумай 3 заголовка для этого текста: {seed_text}")
     results["titles"] = titles
+
+    # Генерация промпта для картинки
+    image_prompt = await ask_ai("дизайнер", f"Создай промпт для генерации обложки к посту на тему: {seed_text}. Опиши визуальный образ.")
+    results["image_prompt"] = image_prompt
+
     return results
 
 async def ask_ai(prompt_type: str, user_message: str):
@@ -137,48 +144,69 @@ async def adapt_content_callback(callback: types.CallbackQuery):
     await callback.message.answer(report, reply_markup=kb)
     await callback.answer()
 
+async def execute_omni_publish(title, body_tg, body_vk, body_zen, body_landing, image_url=None):
+    """Единая функция для публикации во все каналы"""
+    results = []
+
+    # 1. Telegram
+    try:
+        await bot.send_message(CONTENT_CHANNEL_ID, body_tg)
+        results.append("TG: ✅")
+    except Exception as e:
+        logging.error(f"TG Error: {e}")
+        results.append("TG: ❌")
+
+    # 2. VK
+    success_vk = await post_to_vk(body_vk)
+    results.append("VK: ✅" if success_vk else "VK: ❌")
+
+    # 3. Zen (черновик)
+    success_zen = await post_to_zen(title, body_zen)
+    results.append("Zen: ✅" if success_zen else "Zen: ❌")
+
+    # 4. Landing (уже в БД, просто возвращаем статус)
+    results.append("Site: ✅")
+
+    return " | ".join(results)
+
 @dp.callback_query(F.data.startswith("publish_"))
-async def publish_post(callback: types.CallbackQuery):
+async def publish_post_callback(callback: types.CallbackQuery):
     post_id = callback.data.split("_")[1]
     text = callback.message.text
     title = text.split('\n')[0][:50]
 
-    # 1. Telegram
-    try:
-        await bot.send_message(CONTENT_CHANNEL_ID, text)
-        await callback.message.answer("✅ Опубликовано в Telegram")
-    except Exception as e:
-        logging.error(f"TG Channel Error: {e}")
-
-    # 2. VK
-    success_vk = await post_to_vk(text)
-    if success_vk:
-        await callback.message.answer("✅ Опубликовано в VK")
-
-    # 3. Zen (черновик)
-    success_zen = await post_to_zen(f"Статья ТЕРИОН #{post_id}", text)
-    if success_zen:
-        await callback.message.answer("✅ Черновик в Дзене создан")
-
-    # 4. Landing (Сохраняем в БД со статусом published)
+    # Сохраняем и публикуем (быстрый путь)
     smart_id = add_smart_post(
-        rubric="Новости",
-        title=title,
-        body_tg=text,
-        body_vk=text,
-        body_zen=text,
-        body_landing=text
+        rubric="Новости", title=title,
+        body_tg=text, body_vk=text, body_zen=text, body_landing=text
     )
 
-    # Помечаем запись как опубликованную
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE smart_calendar SET status = 'published' WHERE id = ?", (smart_id,))
-    conn.commit()
-    conn.close()
+    report = await execute_omni_publish(title, text, text, text, text)
+    update_smart_post_status(smart_id, 'published')
 
-    await callback.message.answer("✅ Добавлено в ленту лендинга")
+    await callback.message.answer(f"Результат публикации:\n{report}")
     await callback.answer()
+
+async def scheduler_loop():
+    """Фоновая задача для проверки расписания"""
+    logging.info("Scheduler started.")
+    while True:
+        try:
+            pending = get_scheduled_posts()
+            for post in pending:
+                post_id, title, b_tg, b_vk, b_zen, b_land, img = post
+                logging.info(f"Publishing scheduled post: {title}")
+
+                await execute_omni_publish(title, b_tg, b_vk, b_zen, b_land, img)
+                update_smart_post_status(post_id, 'published')
+
+                # Уведомляем админа
+                await bot.send_message(ADMIN_ID, f"🔔 Авто-публикация выполнена: {title}")
+
+        except Exception as e:
+            logging.error(f"Scheduler Error: {e}")
+
+        await asyncio.sleep(60) # Проверка каждую минуту
 
 @dp.callback_query(F.data.startswith("smart_pub_"))
 async def smart_publish_post(callback: types.CallbackQuery):
@@ -218,7 +246,10 @@ async def handle_news_api(request):
     })
 
 async def handle_leads_api(request):
-    # В идеале здесь проверка авторизации через initData в хедере
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not validate_tg_init_data(auth_header, BOT_TOKEN):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
     from database import get_all_leads
     leads = get_all_leads()
     data = []
@@ -233,14 +264,37 @@ async def handle_leads_api(request):
     return web.json_response(data)
 
 async def handle_stats_api(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not validate_tg_init_data(auth_header, BOT_TOKEN):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
     from database import get_stats
     return web.json_response(get_stats())
+
+async def handle_posts_api(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not validate_tg_init_data(auth_header, BOT_TOKEN):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    from database import get_all_smart_posts
+    posts = get_all_smart_posts()
+    data = []
+    for p in posts:
+        data.append({
+            "id": p[0],
+            "rubric": p[1],
+            "title": p[2],
+            "status": p[8],
+            "date": p[9] or p[10]
+        })
+    return web.json_response(data)
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/api/news', handle_news_api)
     app.router.add_get('/api/leads', handle_leads_api)
     app.router.add_get('/api/stats', handle_stats_api)
+    app.router.add_get('/api/posts', handle_posts_api)
 
     # Отдача статики фронтенда (после билда)
     if os.path.exists('frontend/dist'):
@@ -349,10 +403,11 @@ async def chat_handler(message: types.Message):
 
 async def main():
     init_db()
-    # Запуск бота и веб-сервера параллельно
+    # Запуск бота, веб-сервера и планировщика параллельно
     await asyncio.gather(
         dp.start_polling(bot),
-        start_web_server()
+        start_web_server(),
+        scheduler_loop()
     )
 
 if __name__ == "__main__":

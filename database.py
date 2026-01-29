@@ -141,6 +141,33 @@ def get_pending_content():
     conn.close()
     return rows
 
+def get_scheduled_posts():
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, title, body_tg, body_vk, body_zen, body_landing, image_url
+        FROM smart_calendar
+        WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def update_smart_post_status(post_id, status):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE smart_calendar SET status = ? WHERE id = ?", (status, post_id))
+    conn.commit()
+    conn.close()
+
+def get_all_smart_posts(limit=20):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM smart_calendar ORDER BY created_at DESC LIMIT ?", (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
 def get_daily_leads():
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
