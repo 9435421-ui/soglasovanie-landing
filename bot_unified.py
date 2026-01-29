@@ -404,37 +404,52 @@ async def cmd_start(message: types.Message, state: FSMContext):
     # Ссылка на Mini App (в продакшене будет реальный URL)
     web_app_url = "https://ternion.ru/mini-app"
 
-    # Если зашли с лендинга для квиза — сразу запускаем его
-    if "quiz" in source:
-        await cmd_quiz(message, state)
-        return
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📱 Открыть ТЕРИОН App", web_app=WebAppInfo(url=web_app_url))],
-        [InlineKeyboardButton(text="📋 Начать расчет (Квиз)", callback_data="start_quiz")],
-        [InlineKeyboardButton(text="💬 Консультация Антона", callback_data="ask_ai")]
-    ])
-
     # Установка кнопки меню
     await bot.set_chat_menu_button(
         chat_id=message.chat.id,
         menu_button=MenuButtonWebApp(text="ТЕРИОН", web_app=WebAppInfo(url=web_app_url))
     )
 
-    await message.answer("🚀 Добро пожаловать в ТЕРИОН — ваш гид по законной перепланировке!", reply_markup=kb)
+    # Приветствие Антона
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принимаю условия и начинаю", callback_data="consent_yes")],
+        [InlineKeyboardButton(text="📖 Политика конфиденциальности", callback_data="show_privacy")]
+    ])
+
+    welcome_text = (
+        "Здравствуйте. Меня зовут Антон, я ИИ-помощник в системе ТЕРИОН. 🏛️\n\n"
+        "Я помогу вам подготовить данные для анализа вашего объекта и передать их нашим специалистам.\n\n"
+        "Чтобы продолжить, мне необходимо ваше согласие на:\n"
+        "✅ Обработку персональных данных (согласно ФЗ-152).\n"
+        "✅ Получение уведомлений о статусе вашего запроса и информационных сообщений от ТЕРИОН.\n\n"
+        "Нажимая кнопку ниже, вы подтверждаете свое согласие с политикой конфиденциальности и условиями сервиса."
+    )
+
+    await message.answer(welcome_text, reply_markup=kb)
+    await state.set_state(QuizStates.consent)
 
 @dp.message(Command("quiz"))
 async def cmd_quiz(message: types.Message, state: FSMContext):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Согласен", callback_data="consent_yes")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="consent_no")]
-    ])
-    await message.answer(
-        "Перед началом нам нужно ваше согласие на обработку персональных данных в соответствии с ФЗ-152 и на получение уведомлений.\n\n"
-        "Вы согласны?",
-        reply_markup=kb
+    # Команда /quiz теперь ведет на то же приветствие с согласием
+    await cmd_start(message, state)
+
+@dp.message(Command("privacy"))
+async def cmd_privacy(message: types.Message):
+    privacy_text = (
+        "🔒 **Политика конфиденциальности ТЕРИОН**\n\n"
+        "Мы соблюдаем ФЗ-152 «О персональных данных».\n"
+        "1. **Какие данные мы собираем:** Имя, номер телефона, данные об объекте недвижимости.\n"
+        "2. **Цель:** Оценка возможности согласования перепланировки и связь с экспертом.\n"
+        "3. **Защита:** Мы не передаем ваши данные третьим лицам, не имеющим отношения к вашему запросу.\n"
+        "4. **Уведомления:** Мы можем присылать вам информацию о статусе заявки и важные новости законодательства.\n\n"
+        "Вы можете отозвать согласие, написав нам в поддержку."
     )
-    await state.set_state(QuizStates.consent)
+    await message.answer(privacy_text, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "show_privacy")
+async def cb_show_privacy(callback: types.CallbackQuery):
+    await cmd_privacy(callback.message)
+    await callback.answer()
 
 @dp.callback_query(F.data == "start_quiz")
 async def quiz_start(callback: types.CallbackQuery, state: FSMContext):
@@ -452,7 +467,13 @@ async def quiz_start(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(QuizStates.consent, F.data == "consent_yes")
 async def process_consent(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("Отлично! В каком городе находится ваш объект?")
+    # Фиксируем дату согласия (в реальной БД можно добавить поле)
+    await state.update_data(consent_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    await callback.message.edit_text(
+        "Отлично! Начнем консультацию.\n\n"
+        "В каком городе находится ваш объект?"
+    )
     await state.set_state(QuizStates.city)
     await callback.answer()
 
@@ -479,15 +500,33 @@ async def process_city(message: types.Message, state: FSMContext):
 @dp.message(QuizStates.object_type)
 async def process_obj(message: types.Message, state: FSMContext):
     await state.update_data(object_type=message.text)
-    await message.answer("Опишите задачу (что хотите изменить?):")
+    await message.answer(
+        "Пожалуйста, пришлите план БТИ или набросок от руки. "
+        "Я передам его нашим специалистам для детального анализа планировочных решений.\n\n"
+        "Если плана под рукой нет, просто опишите задачу текстом или запишите голосовое сообщение (я расшифрую его):"
+    )
     await state.set_state(QuizStates.details)
 
-@dp.message(QuizStates.details)
+@dp.message(QuizStates.details, F.content_type.in_({'text', 'voice', 'document', 'photo'}))
 async def process_details(message: types.Message, state: FSMContext):
-    await state.update_data(details=message.text)
+    # Обработка медиа на этапе описания задачи
+    details_text = ""
+    if message.text:
+        details_text = message.text
+    elif message.voice:
+        details_text = "[Голосовое описание]"
+        # В реальной версии здесь был бы вызов speech-to-text
+    elif message.document:
+        details_text = f"[Прикреплен план: {message.document.file_name}]"
+    elif message.photo:
+        details_text = "[Прикреплено фото плана]"
+
+    await state.update_data(details=details_text)
+
     kb = ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="📱 Поделиться контактом", request_contact=True)]
     ], resize_keyboard=True, one_time_keyboard=True)
+
     await message.answer("Ваш номер телефона для связи с экспертом. Нажмите кнопку ниже или введите вручную:", reply_markup=kb)
     await state.set_state(QuizStates.phone)
 
@@ -556,7 +595,9 @@ async def process_additional_info(message: types.Message, state: FSMContext):
         city=data.get("city"),
         object_type=data.get("object_type"),
         details=full_details,
-        source=data.get("source")
+        source=data.get("source"),
+        pd_consent=1,
+        consent_date=data.get('consent_date')
     )
 
     # Уведомление в группу
@@ -586,7 +627,18 @@ async def process_additional_info(message: types.Message, state: FSMContext):
     except Exception as e:
         logging.error(f"Error sending lead: {e}")
 
-    await message.answer(f"✅ Спасибо, {data.get('full_name').split()[0]}! Заявка принята. Эксперт Юлия Пархоменко свяжется с вами в ближайшее время.")
+    # Заключительная часть от Антона
+    final_text = (
+        f"Спасибо! Я собрал все необходимые данные.\n\n"
+        f"**Что будет дальше:**\n\n"
+        f"1. Я передаю ваш запрос нашему профильному специалисту.\n"
+        f"2. После изучения документов наш эксперт свяжется с вами по номеру {data.get('phone')}, "
+        f"чтобы обсудить легализацию вашего проекта.\n\n"
+        f"Я всегда на связи, если у вас появятся дополнительные вопросы.\n"
+        f"Ваш Антон, ТЕРИОН."
+    )
+
+    await message.answer(final_text, parse_mode="Markdown")
     await state.clear()
 
 @dp.message(F.text)
