@@ -1,384 +1,170 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ТЕРИОН — согласование перепланировок</title>
-  <style>
-    /* ВСЁ CSS ВНУТРИ — никаких внешних файлов */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      line-height: 1.6;
-      color: #333333;
-      background-color: #ffffff;
-    }
-    h1, h2, h3 {
-      color: #1A1A1A;
-      margin-bottom: 16px;
-    }
-    p, ul, li {
-      margin-bottom: 16px;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ТЕРИОН — Согласование перепланировок</title>
+    <style>
+        :root {
+            --primary: #2E7D32;
+            --dark: #1A1A1A;
+            --light: #F8F9FA;
+            --white: #FFFFFF;
+        }
 
-    section, header, footer {
-      padding: 60px 20px;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
 
-    header {
-      background-color: #F8F9FA;
-      text-align: center;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    header h1 {
-      font-size: 2.2rem;
-      margin-bottom: 20px;
-      line-height: 1.3;
-    }
-    header p {
-      font-size: 1.1rem;
-      color: #555;
-      margin-bottom: 24px;
-    }
+        body {
+            background-color: var(--light);
+            color: var(--dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
 
-    .cta-button {
-      background-color: #2E7D32;
-      color: white;
-      border: none;
-      padding: 14px 32px;
-      font-size: 1.1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.2s;
-    }
-    .cta-button:hover {
-      background-color: #1B5E20;
-    }
+        .container {
+            max-width: 600px;
+            background: var(--white);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
 
-    .consultation-form {
-      margin-top: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-width: 320px;
-      margin: 24px auto 0;
-    }
-    .consultation-form input {
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1rem;
-    }
-    .consultation-form input:focus {
-      outline: 2px solid #2E7D32;
-      border-color: transparent;
-    }
+        .logo {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
 
-    .section-center {
-      text-align: center;
-      max-width: 700px;
-      margin: 0 auto;
-    }
-    .section-center strong {
-      color: #2E7D32;
-    }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            line-height: 1.3;
+        }
 
-    .services {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .service {
-      padding: 20px;
-      border: 1px solid #eee;
-      border-radius: 10px;
-      background-color: #ffffff;
-    }
-    .service h3 {
-      color: #2E7D32;
-      font-size: 1.3rem;
-    }
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
 
-    .cases {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .case {
-      padding: 20px;
-      background-color: #FAFAFA;
-      border-radius: 10px;
-      border-left: 3px solid #2E7D32;
-    }
+        .cta-box {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
 
-    .advantages ul {
-      max-width: 700px;
-      margin: 0 auto;
-      padding-left: 20px;
-    }
-    .advantages li {
-      margin-bottom: 14px;
-    }
+        .btn {
+            display: inline-block;
+            padding: 16px 30px;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: transform 0.2s, background-color 0.2s;
+        }
 
-    .prices {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      max-width: 700px;
-      margin: 0 auto;
-    }
-    .price {
-      text-align: center;
-      padding: 20px;
-      border: 1px solid #eee;
-      border-radius: 10px;
-    }
-    .price h3 {
-      font-size: 1.2rem;
-      margin-bottom: 8px;
-    }
-    .price p {
-      font-size: 1.3rem;
-      font-weight: bold;
-      color: #1A1A1A;
-    }
+        .btn:hover {
+            background-color: #1B5E20;
+            transform: translateY(-2px);
+        }
 
-    .reviews blockquote {
-      font-style: italic;
-      margin: 24px auto;
-      max-width: 700px;
-      padding-left: 20px;
-      border-left: 3px solid #2E7D32;
-    }
-    .reviews strong {
-      display: block;
-      margin-top: 12px;
-      font-style: normal;
-      color: #1A1A1A;
-    }
+        .btn-secondary {
+            background-color: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
 
-    footer {
-      background-color: #F8F9FA;
-      text-align: center;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    footer small {
-      color: #757575;
-      display: block;
-      margin-top: 16px;
-    }
+        .btn-secondary:hover {
+            background-color: var(--primary);
+            color: white;
+        }
 
-    /* Sticky CTA на мобильных */
-    @media (max-width: 768px) {
-      .mobile-cta {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background: white;
-        padding: 16px;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-        z-index: 1000;
-      }
-      .mobile-cta .cta-button {
-        width: 100%;
-        padding: 16px;
-        font-size: 1.2rem;
-      }
-      footer .cta-button {
-        display: none;
-      }
-    }
+        .footer {
+            margin-top: 40px;
+            font-size: 0.9rem;
+            color: #999;
+        }
 
-    @media (min-width: 769px) {
-      .services {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      }
-      .prices {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      }
-    }
-  </style>
+        #news-preview {
+            margin-top: 30px;
+            text-align: left;
+            border-top: 1px solid #EEE;
+            padding-top: 20px;
+        }
+
+        .news-item {
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .news-item span {
+            display: block;
+            color: var(--primary);
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+    </style>
 </head>
 <body>
 
-<header>
-  <p style="color: #2E7D32; font-weight: 600; font-size: 1.4rem; margin-bottom: 10px;">ТЕРИОН</p>
-  <h1>Согласуем перепланировку даже там, где другие сдались</h1>
-  <p>Проект + согласование + поддержка до получения акта БТИ — всё в одном месте.<br>Без штрафов, без суда, с гарантией по договору.</p>
-  <a href="https://t.me/terion_bot?start=quiz_land" style="text-decoration: none;"><button class="cta-button">Получить бесплатную консультацию в Telegram</button></a>
-  <div class="consultation-form">
-    <input type="text" placeholder="Ваше имя" required />
-    <input type="tel" placeholder="Телефон" required />
-  </div>
-</header>
+    <div class="container">
+        <div class="logo">ТЕРИОН</div>
+        <h1>Наш основной сайт в разработке, но мы уже вовсю помогаем клиентам!</h1>
+        <p>ТЕРИОН — это современная экосистема для быстрого и надежного согласования перепланировок. Все наши сервисы, консультации и расчеты стоимости уже доступны в Telegram.</p>
 
-<section class="section-center">
-  <h2>Вам отказали? Или боитесь начинать — вдруг не согласуют?</h2>
-  <p><strong>ТЕРИОН</strong> уже помог <strong>427 клиентам</strong> узаконить перепланировку, даже когда:<br>
-    • Отказали в БТИ<br>
-    • Сказали: «это невозможно»<br>
-    • Перенос кухни или санузла «нарушает все нормы»</p>
-  <p><strong>Если перепланировку можно согласовать — мы сделаем это.</strong><br>
-    А если нет — честно скажем об этом на первом звонке. Без потери вашего времени и денег.</p>
-</section>
+        <div class="cta-box">
+            <a href="https://t.me/terion_bot?start=web_stub" class="btn">🚀 Запустить ИИ-помощника в Telegram</a>
+            <a href="https://t.me/terion_bot" class="btn btn-secondary">📢 Наш Telegram-канал</a>
+        </div>
 
-<section class="services">
-  <h2>Наши услуги</h2>
-  <div class="service">
-    <h3>✅ Бесплатная консультация</h3>
-    <p>15 минут по телефону или Zoom — разберём вашу ситуацию и скажем точно: можно ли согласовать перепланировку и сколько это займёт.</p>
-  </div>
-  <div class="service">
-    <h3>📐 Проект перепланировки</h3>
-    <p>Разрабатываем техническое заключение, чертежи до/после и все документы по требованиям Мосжилинспекции. Включая обоснование инженерных решений.</p>
-  </div>
-  <div class="service">
-    <h3>📑 Полное сопровождение</h3>
-    <p>Подаем документы в МФЦ / БТИ / Мосжилинспекцию, отвечаем на запросы, вносим правки — вы не ходите никуда сами.</p>
-  </div>
-  <div class="service">
-    <h3>✨ Перепланировка под ключ</h3>
-    <p>От идеи — до акта БТИ. Включает проект, согласование и помощь с подбором строителей (по желанию).</p>
-  </div>
-  <div class="service">
-    <h3>⚠️ Согласование после самовольной перепланировки</h3>
-    <p>Помогаем легализовать уже сделанный ремонт — без суда и штрафов, если технически возможно.</p>
-  </div>
-</section>
+        <div id="news-preview">
+            <h3 style="margin-bottom: 15px; font-size: 1rem;">Последние новости экосистемы:</h3>
+            <div id="news-list">
+                <p style="color: #999;">Загрузка новостей...</p>
+            </div>
+        </div>
+    </div>
 
-<section class="cases">
-  <h2>Примеры работ</h2>
-  <div class="case">
-    <p><strong>Студия → 1-комнатная с полноценной кухней</strong><br>
-      Новостройка, ЖК «Сколково Парк». Согласовали перенос кухни в зону гостиной без выноса мокрой зоны.</p>
-  </div>
-  <div class="case">
-    <p><strong>Хрущёвка → светлая студия с гардеробной</strong><br>
-      Снос ненесущих перегородок, объединение санузла, зонирование пространства. Согласовано за 22 дня.</p>
-  </div>
-  <div class="case">
-    <p><strong>Офис в жилом доме → салон красоты</strong><br>
-      Согласовали перепланировку под коммерческое использование — с новыми вентиляцией и электрикой.</p>
-  </div>
-</section>
+    <div class="footer">
+        &copy; 2024 ТЕРИОН. Согласование перепланировок любой сложности.
+    </div>
 
-<section class="advantages">
-  <h2>Почему выбирают ТЕРИОН?</h2>
-  <ul>
-    <li>✅ <strong>100% фокус на согласовании</strong> — не на дизайне интерьеров, а на том, что примут в инстанциях</li>
-    <li>✅ <strong>Работаем с 2015 года</strong> — знаем все изменения в законодательстве и «серые зоны»</li>
-    <li>✅ <strong>Гарантия в договоре</strong>: если не согласуем — вернём деньги за проект</li>
-    <li>✅ <strong>Сопровождение до акта БТИ</strong> — даже если запросили доп. документы через 2 месяца</li>
-    <li>✅ <strong>Без 100% предоплаты</strong> — платите частями на каждом этапе</li>
-  </ul>
-</section>
+    <script>
+        async function loadNews() {
+            try {
+                const response = await fetch('/api/news');
+                const news = await response.json();
+                const container = document.getElementById('news-list');
 
-<section class="prices">
-  <h2>Цены — прозрачно и без сюрпризов</h2>
-  <div class="price">
-    <h3>Консультация</h3>
-    <p>Бесплатно</p>
-  </div>
-  <div class="price">
-    <h3>Проект перепланировки</h3>
-    <p>от 18 000 ₽</p>
-  </div>
-  <div class="price">
-    <h3>Согласование</h3>
-    <p>от 35 000 ₽</p>
-  </div>
-  <div class="price">
-    <h3>Под ключ (проект + согласование)</h3>
-    <p>от 55 000 ₽</p>
-  </div>
-  <p><em>*Итоговая цена зависит от сложности планировки и объекта. Точную стоимость назовём после бесплатной консультации.</em></p>
-</section>
+                if (!news || news.length === 0) {
+                    container.innerHTML = '<p style="color: #999;">Следите за обновлениями в нашем боте.</p>';
+                    return;
+                }
 
-<section class="reviews">
-  <h2>Отзывы клиентов</h2>
-  <blockquote>
-    «После двух отказов в других фирмах обратились сюда. За 3 недели согласовали перепланировку с переносом кухни! Очень чётко объясняли каждый шаг.»<br>
-    <strong>— Елена, Москва</strong>
-  </blockquote>
-  <blockquote>
-    «Сделали проект так, что Мосжилинспекция одобрила с первого раза. Ни одной правки!»<br>
-    <strong>— Дмитрий, Новая Москва</strong>
-  </blockquote>
-</section>
-
-<section id="news" style="background-color: #FAFAFA; border-top: 1px solid #EEE;">
-  <div class="section-center" style="margin-bottom: 40px;">
-    <h2>Новости и Блог ТЕРИОН</h2>
-    <p>Актуальные советы по перепланировке и новости законодательства</p>
-  </div>
-  <div id="news-container" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px; margin: 0 auto;">
-    <!-- Сюда будут подгружаться новости через JS -->
-    <p style="text-align: center; color: #757575;">Загрузка актуальных новостей...</p>
-  </div>
-</section>
-
-<script>
-    async function loadNews() {
-        try {
-            // Фетчим новости с сервера бота (так как лендинг может быть на другом хостинге)
-            const response = await fetch('http://176.124.219.183:8080/api/news');
-            const news = await response.json();
-            const container = document.getElementById('news-container');
-
-            if (!news || news.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: #757575;">Пока новостей нет. Подписывайтесь на наш <a href="https://t.me/terion_bot" style="color: #2E7D32;">Telegram-канал</a>!</p>';
-                return;
-            }
-
-            container.innerHTML = news.map(item => `
-                <div style="background-color: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #EEE; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div style="color: #2E7D32; font-size: 0.85rem; font-weight: bold; margin-bottom: 8px; text-transform: uppercase;">Новости ТЕРИОН</div>
-                    <h3 style="margin-bottom: 12px;">${item.title}</h3>
-                    <p style="color: #555; margin-bottom: 16px;">${item.content}</p>
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #999;">
+                container.innerHTML = news.slice(0, 2).map(item => `
+                    <div class="news-item">
                         <span>${new Date(item.date).toLocaleDateString('ru-RU')}</span>
-                        <a href="https://t.me/terion_bot" style="color: #2E7D32; font-weight: 600; text-decoration: none;">Читать в Telegram →</a>
+                        <strong>${item.title}</strong>
                     </div>
-                </div>
-            `).join('');
-        } catch (error) {
-            console.error('Error loading news:', error);
-            document.getElementById('news-container').innerHTML = '<p style="text-align: center; color: #757575;">Не удалось загрузить новости автоматически. <br>Загляните в наш <a href="https://t.me/terion_bot" style="color: #2E7D32;">Telegram-канал</a>.</p>';
+                `).join('');
+            } catch (error) {
+                document.getElementById('news-list').innerHTML = '<p style="color: #999;">Новости доступны в Telegram-боте.</p>';
+            }
         }
-    }
-    document.addEventListener('DOMContentLoaded', loadNews);
-</script>
-
-<footer>
-  <h2>Не теряйте время на отказы.</h2>
-  <p>Узнайте уже сегодня — можно ли узаконить вашу перепланировку. Даже если вам говорили «нет».</p>
-  <a href="https://t.me/terion_bot?start=quiz_land" style="text-decoration: none;"><button class="cta-button">Получить бесплатную консультацию в Telegram</button></a>
-  <div class="consultation-form">
-    <input type="text" placeholder="Ваше имя" required />
-    <input type="tel" placeholder="Телефон" required />
-  </div>
-  <p><small>Ваш звонок ни к чему не обязывает. Консультация — 15 минут, без спама и навязчивых продаж.</small></p>
-  <p><a href="https://t.me/terion_bot?start=quiz_land" style="color: #2E7D32;">@terion_bot — Telegram бот</a></p>
-</footer>
-
-<!-- Мобильный CTA -->
-<div class="mobile-cta">
-  <a href="https://t.me/terion_bot?start=quiz_land" style="text-decoration: none;"><button class="cta-button">Получить бесплатную консультацию в Telegram</button></a>
-</div>
-
+        loadNews();
+    </script>
 </body>
 </html>
