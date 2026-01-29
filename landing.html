@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Согласование перепланировки</title>
+  <style>
+    /* ВСЁ CSS ВНУТРИ — никаких внешних файлов */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      background-color: #ffffff;
+    }
+    h1, h2, h3 {
+      color: #1A1A1A;
+      margin-bottom: 16px;
+    }
+    p, ul, li {
+      margin-bottom: 16px;
+    }
+
+    section, header, footer {
+      padding: 60px 20px;
+    }
+
+    header {
+      background-color: #F8F9FA;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    header h1 {
+      font-size: 2.2rem;
+      margin-bottom: 20px;
+      line-height: 1.3;
+    }
+    header p {
+      font-size: 1.1rem;
+      color: #555;
+      margin-bottom: 24px;
+    }
+
+    .cta-button {
+      background-color: #2E7D32;
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+    .cta-button:hover {
+      background-color: #1B5E20;
+    }
+
+    .consultation-form {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 320px;
+      margin: 24px auto 0;
+    }
+    .consultation-form input {
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    .consultation-form input:focus {
+      outline: 2px solid #2E7D32;
+      border-color: transparent;
+    }
+
+    .section-center {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .section-center strong {
+      color: #2E7D32;
+    }
+
+    .services {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .service {
+      padding: 20px;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      background-color: #ffffff;
+    }
+    .service h3 {
+      color: #2E7D32;
+      font-size: 1.3rem;
+    }
+
+    .cases {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .case {
+      padding: 20px;
+      background-color: #FAFAFA;
+      border-radius: 10px;
+      border-left: 3px solid #2E7D32;
+    }
+
+    .advantages ul {
+      max-width: 700px;
+      margin: 0 auto;
+      padding-left: 20px;
+    }
+    .advantages li {
+      margin-bottom: 14px;
+    }
+
+    .prices {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .price {
+      text-align: center;
+      padding: 20px;
+      border: 1px solid #eee;
+      border-radius: 10px;
+    }
+    .price h3 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+    }
+    .price p {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #1A1A1A;
+    }
+
+    .reviews blockquote {
+      font-style: italic;
+      margin: 24px auto;
+      max-width: 700px;
+      padding-left: 20px;
+      border-left: 3px solid #2E7D32;
+    }
+    .reviews strong {
+      display: block;
+      margin-top: 12px;
+      font-style: normal;
+      color: #1A1A1A;
+    }
+
+    footer {
+      background-color: #F8F9FA;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    footer small {
+      color: #757575;
+      display: block;
+      margin-top: 16px;
+    }
+
+    /* Sticky CTA на мобильных */
+    @media (max-width: 768px) {
+      .mobile-cta {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        padding: 16px;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+      }
+      .mobile-cta .cta-button {
+        width: 100%;
+        padding: 16px;
+        font-size: 1.2rem;
+      }
+      footer .cta-button {
+        display: none;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .services {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      }
+      .prices {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Согласуем перепланировку даже там, где другие сдались</h1>
+  <p>Проект + согласование + поддержка до получения акта БТИ — всё в одном месте.<br>Без штрафов, без суда, с гарантией по договору.</p>
+  <button class="cta-button">Получить бесплатную консультацию</button>
+  <div class="consultation-form">
+    <input type="text" placeholder="Ваше имя" required />
+    <input type="tel" placeholder="Телефон" required />
+  </div>
+</header>
+
+<section class="section-center">
+  <h2>Вам отказали? Или боитесь начинать — вдруг не согласуют?</h2>
+  <p>Мы уже помогли <strong>427 клиентам</strong> узаконить перепланировку, даже когда:<br>
+    • Отказали в БТИ<br>
+    • Сказали: «это невозможно»<br>
+    • Перенос кухни или санузла «нарушает все нормы»</p>
+  <p><strong>Если перепланировку можно согласовать — мы сделаем это.</strong><br>
+    А если нет — честно скажем об этом на первом звонке. Без потери вашего времени и денег.</p>
+</section>
+
+<section class="services">
+  <h2>Наши услуги</h2>
+  <div class="service">
+    <h3>✅ Бесплатная консультация</h3>
+    <p>15 минут по телефону или Zoom — разберём вашу ситуацию и скажем точно: можно ли согласовать перепланировку и сколько это займёт.</p>
+  </div>
+  <div class="service">
+    <h3>📐 Проект перепланировки</h3>
+    <p>Разрабатываем техническое заключение, чертежи до/после и все документы по требованиям Мосжилинспекции. Включая обоснование инженерных решений.</p>
+  </div>
+  <div class="service">
+    <h3>📑 Полное сопровождение</h3>
+    <p>Подаем документы в МФЦ / БТИ / Мосжилинспекцию, отвечаем на запросы, вносим правки — вы не ходите никуда сами.</p>
+  </div>
+  <div class="service">
+    <h3>✨ Перепланировка под ключ</h3>
+    <p>От идеи — до акта БТИ. Включает проект, согласование и помощь с подбором строителей (по желанию).</p>
+  </div>
+  <div class="service">
+    <h3>⚠️ Согласование после самовольной перепланировки</h3>
+    <p>Помогаем легализовать уже сделанный ремонт — без суда и штрафов, если технически возможно.</p>
+  </div>
+</section>
+
+<section class="cases">
+  <h2>Примеры работ</h2>
+  <div class="case">
+    <p><strong>Студия → 1-комнатная с полноценной кухней</strong><br>
+      Новостройка, ЖК «Сколково Парк». Согласовали перенос кухни в зону гостиной без выноса мокрой зоны.</p>
+  </div>
+  <div class="case">
+    <p><strong>Хрущёвка → светлая студия с гардеробной</strong><br>
+      Снос ненесущих перегородок, объединение санузла, зонирование пространства. Согласовано за 22 дня.</p>
+  </div>
+  <div class="case">
+    <p><strong>Офис в жилом доме → салон красоты</strong><br>
+      Согласовали перепланировку под коммерческое использование — с новыми вентиляцией и электрикой.</p>
+  </div>
+</section>
+
+<section class="advantages">
+  <h2>Почему нас выбирают снова и снова?</h2>
+  <ul>
+    <li>✅ <strong>100% фокус на согласовании</strong> — не на дизайне интерьеров, а на том, что примут в инстанциях</li>
+    <li>✅ <strong>Работаем с 2015 года</strong> — знаем все изменения в законодательстве и «серые зоны»</li>
+    <li>✅ <strong>Гарантия в договоре</strong>: если не согласуем — вернём деньги за проект</li>
+    <li>✅ <strong>Сопровождение до акта БТИ</strong> — даже если запросили доп. документы через 2 месяца</li>
+    <li>✅ <strong>Без 100% предоплаты</strong> — платите частями на каждом этапе</li>
+  </ul>
+</section>
+
+<section class="prices">
+  <h2>Цены — прозрачно и без сюрпризов</h2>
+  <div class="price">
+    <h3>Консультация</h3>
+    <p>Бесплатно</p>
+  </div>
+  <div class="price">
+    <h3>Проект перепланировки</h3>
+    <p>от 18 000 ₽</p>
+  </div>
+  <div class="price">
+    <h3>Согласование</h3>
+    <p>от 35 000 ₽</p>
+  </div>
+  <div class="price">
+    <h3>Под ключ (проект + согласование)</h3>
+    <p>от 55 000 ₽</p>
+  </div>
+  <p><em>*Итоговая цена зависит от сложности планировки и объекта. Точную стоимость назовём после бесплатной консультации.</em></p>
+</section>
+
+<section class="reviews">
+  <h2>Отзывы клиентов</h2>
+  <blockquote>
+    «После двух отказов в других фирмах обратились сюда. За 3 недели согласовали перепланировку с переносом кухни! Очень чётко объясняли каждый шаг.»<br>
+    <strong>— Елена, Москва</strong>
+  </blockquote>
+  <blockquote>
+    «Сделали проект так, что Мосжилинспекция одобрила с первого раза. Ни одной правки!»<br>
+    <strong>— Дмитрий, Новая Москва</strong>
+  </blockquote>
+</section>
+
+<footer>
+  <h2>Не теряйте время на отказы.</h2>
+  <p>Узнайте уже сегодня — можно ли узаконить вашу перепланировку. Даже если вам говорили «нет».</p>
+  <button class="cta-button">Получить бесплатную консультацию</button>
+  <div class="consultation-form">
+    <input type="text" placeholder="Ваше имя" required />
+    <input type="tel" placeholder="Телефон" required />
+  </div>
+  <p><small>Ваш звонок ни к чему не обязывает. Консультация — 15 минут, без спама и навязчивых продаж.</small></p>
+</footer>
+
+<!-- Мобильный CTA -->
+<div class="mobile-cta">
+  <button class="cta-button">Получить бесплатную консультацию</button>
+</div>
+
+</body>
+</html>
