@@ -16,7 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 
 from config import (BOT_TOKEN, ADMIN_ID, OPENROUTER_API_KEY, CONTENT_CHANNEL_ID,
                     LEADS_GROUP_CHAT_ID, THREAD_ID_KVARTIRY, THREAD_ID_KOMMERCIA, THREAD_ID_DOMA,
-                    DATABASE_PATH)
+                    THREAD_ID_LOGS, DATABASE_PATH)
 from database import (save_lead, init_db, get_pending_content, add_content_draft,
                       get_latest_news, add_smart_post, get_scheduled_posts, update_smart_post_status,
                       get_birthday_users, update_user_birthday)
@@ -28,9 +28,9 @@ logging.basicConfig(level=logging.INFO)
 
 # Роли агентов
 AGENT_PROMPTS = {
-    "квалификатор": "Ты Квалификатор ТЕРИОН. Твоя цель - провести пользователя через квиз, узнать город, тип объекта и телефон. Будь вежлив и краток.",
-    "продавец": "Ты Продавец ТЕРИОН. Твоя цель - продать ценность услуг Юлии Пархоменко и получить контакт лида. ЖЕСТКОЕ ПРАВИЛО: НИКОГДА НЕ НАЗЫВАЙ ЦЕНЫ. Если спрашивают стоимость, говори: 'Каждый проект уникален, эксперт Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Давайте пройдем короткий квиз (/quiz) или назначим консультацию?'. Всегда старайся направить пользователя к расчету стоимости через квиз.",
-    "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы. Рубрики: 'Советы', 'Интересные факты', 'Новости проекта', 'Поздравления'. Тон: профессиональный, доверительный. Для поздравлений - теплый и праздничный.",
+    "квалификатор": "Ты Квалификатор ТЕРИОН. Твоя цель - провести пользователя через квиз, узнать город, тип объекта и телефон. Будь вежлив и краток. Твоя миссия — честная оценка рисков.",
+    "продавец": "Ты Антон, экспертный ИИ-консультант ТЕРИОН. Ты помогаешь Юлии Пархоменко. Твой стиль: профессиональный, спокойный, честный. \n\nМАНИФЕСТ: Если решение возможно — мы объясним путь. Если невозможно — скажем об этом сразу. ТЕРИОН не обещает невозможного: мы честно оцениваем риски, стоимость и сроки каждого шага.\n\nЖЕСТКОЕ ПРАВИЛО ПО ЦЕНАМ: НИКОГДА НЕ НАЗЫВАЙ ЦИФРЫ. На вопросы о стоимости отвечай: 'Стоимость согласования зависит от множества факторов: города, типа дома, сложности изменений. Юлия Пархоменко рассчитает точную смету после анализа ваших документов. Для начала рекомендую пройти наш квиз (/quiz) или загрузить план помещения прямо здесь'.",
+    "контент-менеджер": "Ты Главред ТЕРИОН. Твоя задача - адаптировать текст под разные платформы. Рубрики: 'Советы', 'Интересные факты', 'Новости проекта', 'Поздравления'. Тон: профессиональный, архитектурный.",
     "креативщик": "Ты Креативщик ТЕРИОН. Придумывай заголовки и идеи для постов. Помни про рубрики: факты, советы, праздники РФ.",
     "маркетолог": "Ты Стратег ТЕРИОН. Анализируй базу знаний и предлагай темы. Следи за праздничным календарем РФ.",
     "дизайнер": "Ты Дизайнер ТЕРИОН. Твоя задача — создавать промпты для генерации изображений. ВАЖНО: На изображениях НЕ ДОЛЖНО БЫТЬ ТЕКСТА. Стиль: архитектурный минимализм, интерьеры, чертежи. Цвета: #2E7D32 и #1A1A1A."
@@ -71,6 +71,7 @@ class QuizStates(StatesGroup):
     geography = State()
     property_type = State()
     floors = State()
+    area = State()
     project_status = State()
     documentation = State()
     additional_info = State()
@@ -144,6 +145,11 @@ async def ask_ai(prompt_type: str, user_message: str):
 @dp.message(Command("admin"))
 async def cmd_admin(message: types.Message):
     if message.from_user.id != ADMIN_ID:
+        await message.answer(
+            f"⛔️ Доступ ограничен. Ваш ID: `{message.from_user.id}`.\n\n"
+            f"Чтобы получить права администратора, добавьте этот ID в переменную `ADMIN_ID` в файле `.env` на сервере и перезапустите бота.",
+            parse_mode="Markdown"
+        )
         return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -495,8 +501,13 @@ async def start_web_server():
     await site.start()
     logging.info("API Server started on port 8080")
 
+@dp.message(Command("my_id"))
+async def cmd_my_id(message: types.Message):
+    await message.answer(f"Ваш Telegram ID: `{message.from_user.id}`. Используйте его для настройки ADMIN_ID в .env файле.", parse_mode="Markdown")
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
+    logging.info(f"User {message.from_user.id} (@{message.from_user.username}) started the bot.")
     args = message.text.split()
     source = args[1] if len(args) > 1 else "direct"
     await state.update_data(source=source)
@@ -521,15 +532,16 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     if message.from_user.id == ADMIN_ID:
         main_kb_list.append([KeyboardButton(text="🛠 Панель управления")])
+        main_kb_list.append([KeyboardButton(text="📅 Умный календарь")])
 
     main_kb = ReplyKeyboardMarkup(keyboard=main_kb_list, resize_keyboard=True)
 
-    if source == "quiz_land" or source == "quiz":
+    if source in ["quiz_land", "quiz"]:
         # Если пришли с лендинга сразу на квиз
         welcome_text = (
-            "Здравствуйте! Я Антон, ИИ ТЕРИОН. 🏛️\n"
-            "Вижу, вы хотите рассчитать стоимость согласования.\n\n"
-            "Пожалуйста, нажмите кнопку ниже, чтобы подтвердить согласие с политикой и отправить контакт для связи."
+            "Здравствуйте. Меня зовут Антон, я ИИ-помощник в системе ТЕРИОН. 🏛️\n\n"
+            "Вижу, вы хотите рассчитать стоимость согласования и оценить риски проекта.\n\n"
+            "Для начала анализа, пожалуйста, подтвердите согласие на обработку данных и поделитесь контактом, нажав кнопку ниже."
         )
         kb = ReplyKeyboardMarkup(keyboard=[
             [KeyboardButton(text="✅ Согласен и отправить телефон", request_contact=True)],
@@ -539,15 +551,26 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await state.set_state(QuizStates.consent)
     else:
         welcome_text = (
-            "Добро пожаловать в ТЕРИОН! 🏛️\n\n"
-            "Я помогу вам разобраться с перепланировкой, рассчитать стоимость и подготовить документы.\n\n"
+            "Добро пожаловать в экосистему ТЕРИОН! 🏛️\n\n"
+            "Я помогу вам легализовать перепланировку, оценить риски объекта и подготовить документы по всей России.\n\n"
             "Выберите нужное действие в меню ниже:"
         )
         await message.answer(welcome_text, reply_markup=main_kb)
 
-@dp.message(F.text == "🛠 Панель управления", F.from_user.id == ADMIN_ID)
+@dp.message(F.text == "🛠 Панель управления")
 async def admin_menu_btn(message: types.Message):
-    await cmd_admin(message)
+    if message.from_user.id == ADMIN_ID:
+        await cmd_admin(message)
+    else:
+        logging.warning(f"Unauthorized access attempt to admin panel from user {message.from_user.id}")
+        await message.answer(f"Доступ запрещен. Ваш ID: {message.from_user.id}. Убедитесь, что он указан в ADMIN_ID.")
+
+@dp.message(F.text == "📅 Умный календарь")
+async def admin_calendar_btn(message: types.Message):
+    if message.from_user.id == ADMIN_ID:
+        await admin_content(types.CallbackQuery(id="0", from_user=message.from_user, chat_instance="0", message=message, data="admin_content"))
+    else:
+        await message.answer("Доступ запрещен.")
 
 @dp.message(F.text == "📊 Рассчитать стоимость (Квиз)")
 async def menu_quiz(message: types.Message, state: FSMContext):
@@ -611,7 +634,7 @@ async def process_consent(message: types.Message, state: FSMContext):
     if not message.contact:
         # Если пришел текст, который не является кнопкой политики, просим контакт
         if message.text != "📖 Политика конфиденциальности":
-            await message.answer("⚠️ Пожалуйста, подтвердите согласие и отправьте контакт кнопкой ниже, чтобы мы могли начать.")
+            await message.answer("⚠️ Чтобы продолжить, пожалуйста, нажмите кнопку **'✅ Согласен и отправить телефон'**.")
         return
 
     phone = message.contact.phone_number
@@ -636,6 +659,26 @@ async def process_consent(message: types.Message, state: FSMContext):
     )
     await state.set_state(QuizStates.geography)
 
+@dp.message(QuizStates.geography, F.text)
+async def process_geography_text(message: types.Message, state: FSMContext):
+    await state.update_data(geography=message.text)
+    await show_property_type_selection(message, state)
+
+async def show_property_type_selection(message_or_callback, state: FSMContext):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Квартира в новостройке", callback_data="type_new")],
+        [InlineKeyboardButton(text="Вторичное жилье", callback_data="type_old")],
+        [InlineKeyboardButton(text="Коммерческое помещение", callback_data="type_comm")],
+        [InlineKeyboardButton(text="Частный дом", callback_data="type_house")]
+    ])
+    text = "Укажите тип объекта для определения сложности проекта и набора необходимых документов:"
+
+    if isinstance(message_or_callback, types.Message):
+        await message_or_callback.answer(text, reply_markup=kb)
+    else:
+        await message_or_callback.message.edit_text(text, reply_markup=kb)
+    await state.set_state(QuizStates.property_type)
+
 @dp.message(QuizStates.consent)
 async def process_consent_fallback(message: types.Message):
     await message.answer(
@@ -656,20 +699,43 @@ async def process_geography(callback: types.CallbackQuery, state: FSMContext):
     geo_map = {"geo_moscow": "Москва", "geo_mo": "Московская область", "geo_other": "Другой регион"}
     geo = geo_map.get(callback.data, "Не указан")
     await state.update_data(geography=geo)
+    await show_property_type_selection(callback, state)
+    await callback.answer()
+
+@dp.message(QuizStates.property_type, F.text)
+async def process_property_type_text(message: types.Message, state: FSMContext):
+    await state.update_data(property_type=message.text)
+    await show_floors_question(message, state)
+
+async def show_floors_question(message_or_callback, state: FSMContext):
+    text = "Это важно для расчета нагрузки на перекрытия и понимания возможности легализации. На каком этаже находится объект и сколько всего этажей в доме?\n\n(Пример ввода: 5/17)"
+    if isinstance(message_or_callback, types.Message):
+        await message_or_callback.answer(text)
+    else:
+        await message_or_callback.message.edit_text(text)
+    await state.set_state(QuizStates.floors)
+
+@dp.message(QuizStates.floors)
+async def process_floors(message: types.Message, state: FSMContext):
+    await state.update_data(floors=message.text)
+    await message.answer("Укажите примерную площадь помещения в кв. метрах. Это основной параметр для оценки стоимости работ.")
+    await state.set_state(QuizStates.area)
+
+@dp.message(QuizStates.area)
+async def process_area(message: types.Message, state: FSMContext):
+    await state.update_data(area=message.text)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Квартира в новостройке", callback_data="type_new")],
-        [InlineKeyboardButton(text="Вторичное жилье", callback_data="type_old")],
-        [InlineKeyboardButton(text="Коммерческое помещение", callback_data="type_comm")],
-        [InlineKeyboardButton(text="Частный дом", callback_data="type_house")]
+        [InlineKeyboardButton(text="Только планирую работы", callback_data="status_plan")],
+        [InlineKeyboardButton(text="Уже выполнены (легализация)", callback_data="status_done")],
+        [InlineKeyboardButton(text="В процессе ремонта", callback_data="status_process")]
     ])
 
-    await callback.message.edit_text(
-        "Укажите тип объекта для определения сложности проекта:",
+    await message.answer(
+        "На каком этапе находится ваш проект? Это поможет определить процедуру: проектную или судебную.",
         reply_markup=kb
     )
-    await state.set_state(QuizStates.property_type)
-    await callback.answer()
+    await state.set_state(QuizStates.project_status)
 
 @dp.callback_query(QuizStates.property_type, F.data.startswith("type_"))
 async def process_property_type(callback: types.CallbackQuery, state: FSMContext):
@@ -681,29 +747,27 @@ async def process_property_type(callback: types.CallbackQuery, state: FSMContext
     }
     p_type = type_map.get(callback.data, "Не указан")
     await state.update_data(property_type=p_type)
-
-    await callback.message.edit_text(
-        "Это важно для расчета нагрузки на перекрытия. На каком этаже объект и сколько всего этажей в доме?\n\n"
-        "(Пример ввода: 5/17)"
-    )
-    await state.set_state(QuizStates.floors)
+    await show_floors_question(callback, state)
     await callback.answer()
 
-@dp.message(QuizStates.floors)
-async def process_floors(message: types.Message, state: FSMContext):
-    await state.update_data(floors=message.text)
 
+@dp.message(QuizStates.project_status, F.text)
+async def process_project_status_text(message: types.Message, state: FSMContext):
+    await state.update_data(project_status=message.text)
+    await show_documentation_selection(message, state)
+
+async def show_documentation_selection(message_or_callback, state: FSMContext):
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Только планирую работы", callback_data="status_plan")],
-        [InlineKeyboardButton(text="Уже выполнены (легализация)", callback_data="status_done")],
-        [InlineKeyboardButton(text="В процессе ремонта", callback_data="status_process")]
+        [InlineKeyboardButton(text="✅ Да, сейчас пришлю", callback_data="doc_yes")],
+        [InlineKeyboardButton(text="❌ Нет плана", callback_data="doc_no")],
+        [InlineKeyboardButton(text="✏️ Есть только набросок", callback_data="doc_sketch")]
     ])
-
-    await message.answer(
-        "На каком этапе находится ваш проект?",
-        reply_markup=kb
-    )
-    await state.set_state(QuizStates.project_status)
+    text = "Есть ли у вас на руках план помещения (БТИ, технический паспорт или эскиз)? Анализ документов — первый шаг к честной оценке."
+    if isinstance(message_or_callback, types.Message):
+        await message_or_callback.answer(text, reply_markup=kb)
+    else:
+        await message_or_callback.message.edit_text(text, reply_markup=kb)
+    await state.set_state(QuizStates.documentation)
 
 @dp.callback_query(QuizStates.project_status, F.data.startswith("status_"))
 async def process_project_status(callback: types.CallbackQuery, state: FSMContext):
@@ -714,18 +778,7 @@ async def process_project_status(callback: types.CallbackQuery, state: FSMContex
     }
     status = status_map.get(callback.data, "Не указан")
     await state.update_data(project_status=status)
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Да, сейчас пришлю", callback_data="doc_yes")],
-        [InlineKeyboardButton(text="❌ Нет плана", callback_data="doc_no")],
-        [InlineKeyboardButton(text="✏️ Есть только набросок", callback_data="doc_sketch")]
-    ])
-
-    await callback.message.edit_text(
-        "Есть ли у вас на руках план помещения (БТИ, технический паспорт или эскиз)?",
-        reply_markup=kb
-    )
-    await state.set_state(QuizStates.documentation)
+    await show_documentation_selection(callback, state)
     await callback.answer()
 
 @dp.callback_query(QuizStates.documentation, F.data.startswith("doc_"))
@@ -773,6 +826,7 @@ async def process_additional_info(message: types.Message, state: FSMContext):
     card_details = (
         f"📍 География: {data.get('geography')}\n"
         f"🏠 Тип объекта: {data.get('property_type')}\n"
+        f"📏 Площадь: {data.get('area')} кв.м.\n"
         f"🏢 Этажность: {data.get('floors')}\n"
         f"🛠 Статус: {data.get('project_status')}\n"
         f"📑 Наличие плана: {data.get('documentation_choice')}\n"
@@ -795,9 +849,10 @@ async def process_additional_info(message: types.Message, state: FSMContext):
 
     # Уведомление в группу
     thread_id = THREAD_ID_KVARTIRY
-    if data.get("property_type") == "Коммерческое помещение":
+    p_type = data.get("property_type", "")
+    if "Коммерческое" in p_type:
         thread_id = THREAD_ID_KOMMERCIA
-    elif data.get("property_type") == "Частный дом":
+    elif "дом" in p_type:
         thread_id = THREAD_ID_DOMA
 
     lead_msg = f"🚀 Новый лид (ТЕРИОН v2.1)\n\n" \
@@ -806,16 +861,21 @@ async def process_additional_info(message: types.Message, state: FSMContext):
                f"📋 КАРТОЧКА ОБЪЕКТА:\n{card_details}\n\n" \
                f"🔗 Источник: {data.get('source')}"
 
+    logging.info(f"Attempting to send lead to group {LEADS_GROUP_CHAT_ID}, thread {thread_id}")
     try:
-        await bot.send_message(chat_id=LEADS_GROUP_CHAT_ID, message_thread_id=thread_id, text=lead_msg)
-        if message.voice:
-            await bot.send_voice(LEADS_GROUP_CHAT_ID, message.voice.file_id, message_thread_id=thread_id)
-        elif message.document:
-            await bot.send_document(LEADS_GROUP_CHAT_ID, message.document.file_id, message_thread_id=thread_id)
-        elif message.photo:
-            await bot.send_photo(LEADS_GROUP_CHAT_ID, message.photo[-1].file_id, message_thread_id=thread_id)
+        if LEADS_GROUP_CHAT_ID == 0:
+            logging.warning("LEADS_GROUP_CHAT_ID is not set (0). Lead notification skipped.")
+        else:
+            await bot.send_message(chat_id=LEADS_GROUP_CHAT_ID, message_thread_id=thread_id, text=lead_msg)
+            if message.voice:
+                await bot.send_voice(LEADS_GROUP_CHAT_ID, message.voice.file_id, message_thread_id=thread_id)
+            elif message.document:
+                await bot.send_document(LEADS_GROUP_CHAT_ID, message.document.file_id, message_thread_id=thread_id)
+            elif message.photo:
+                await bot.send_photo(LEADS_GROUP_CHAT_ID, message.photo[-1].file_id, message_thread_id=thread_id)
+            logging.info("Lead successfully forwarded to the working group.")
     except Exception as e:
-        logging.error(f"Error sending lead: {e}")
+        logging.error(f"Error sending lead to group: {e}")
 
     # Проверка рабочего времени
     is_working = get_working_hours_status()
@@ -825,10 +885,11 @@ async def process_additional_info(message: types.Message, state: FSMContext):
 
     # Заключительная часть от Антона
     final_text = (
-        f"Я записал ваши ответы и передал их нашим специалистам.\n\n"
-        f"**Что дальше:** Наш эксперт свяжется с вами по номеру {data.get('phone')} для подробной консультации.{work_time_msg}\n\n"
-        f"Я всегда на связи, если у вас появятся дополнительные вопросы.\n"
-        f"Ваш Антон, ТЕРИОН."
+        "Благодарю за ответы. Мы в ТЕРИОН честно оцениваем каждый проект: если решение возможно — мы объясним путь, "
+        "если нет — скажем об этом сразу, чтобы вы не тратили ресурсы впустую.\n\n"
+        f"**Ваш статус:** Все данные переданы эксперту Юлии Пархоменко. Она проанализирует карточку объекта и свяжется с вами по номеру {data.get('phone')} для детального разбора.{work_time_msg}\n\n"
+        "Пока эксперт готовит ответ, вы можете задать мне любые дополнительные вопросы или загрузить документы.\n\n"
+        "Ваш Антон, ТЕРИОН. 🏛️"
     )
 
     await message.answer(final_text, parse_mode="Markdown")
@@ -922,9 +983,38 @@ async def cb_smart_sched(callback: types.CallbackQuery):
     await callback.message.edit_text(f"📅 Пост поставлен в очередь на {sched_time}")
     await callback.answer()
 
+@dp.message(F.voice)
+async def voice_handler(message: types.Message, state: FSMContext):
+    # Если мы в квизе на шаге additional_info, обрабатываем как часть квиза
+    curr_state = await state.get_state()
+    if curr_state == QuizStates.additional_info:
+        await process_additional_info(message, state)
+        return
+
+    await message.answer("Я получил ваше голосовое сообщение. Антон пока лучше понимает текст, но я уже передал аудио нашему эксперту Юлии Пархоменко.")
+    if LEADS_GROUP_CHAT_ID != 0:
+        try:
+            await bot.send_voice(
+                chat_id=LEADS_GROUP_CHAT_ID,
+                voice=message.voice.file_id,
+                message_thread_id=THREAD_ID_LOGS,
+                caption=f"🎙 Голосовой вопрос от {message.from_user.full_name} (@{message.from_user.username or 'id'+str(message.from_user.id)})"
+            )
+        except Exception as e:
+            logging.error(f"Failed to forward voice message: {e}")
+
 @dp.message(F.text)
 async def chat_handler(message: types.Message):
-    response = await ask_ai("продавец", message.text)
+    # Проверка на вопросы о цене
+    text_lower = message.text.lower()
+    if any(word in text_lower for word in ["цена", "стоимость", "сколько стоит", "прайс", "тариф"]):
+        response = (
+            "Стоимость согласования в ТЕРИОН всегда индивидуальна и зависит от сложности проекта, типа объекта и региона. "
+            "Мы не называем примерных цифр, так как дорожим своей репутацией и вашей уверенностью.\n\n"
+            "Юлия Пархоменко рассчитает точную смету после изучения ваших документов. Рекомендую пройти наш квиз (/quiz) — это займет 2 минуты и позволит нам сделать предметное предложение."
+        )
+    else:
+        response = await ask_ai("продавец", message.text)
     await message.answer(response)
 
 async def main():
