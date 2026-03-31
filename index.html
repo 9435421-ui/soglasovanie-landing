@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ТЕРИОН — Согласование перепланировки по всей России</title>
+
+  <!-- Шрифты -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --accent: #2E7D32; /* ТЕРИОН Зеленый */
+      --accent-dark: #1B5E20;
+      --accent-soft: #F1F8E9;
+      --text-dark: #0F172A;
+      --text-muted: #475569;
+      --border-light: #E5E7EB;
+      --white: #FFFFFF;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #1F2937;
+      background-color: var(--white);
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      font-family: 'Playfair Display', serif;
+      color: var(--text-dark);
+      line-height: 1.25;
+    }
+
+    h1 { font-size: 2.8rem; margin-bottom: 24px; }
+    h2 { font-size: 2rem; margin-bottom: 32px; }
+    h3 { font-size: 1.4rem; margin-bottom: 12px; }
+
+    p { margin-bottom: 16px; }
+
+    section {
+      padding: 80px 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* Logo */
+    .brand {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+      display: block;
+      margin-bottom: 40px;
+    }
+
+    /* Кнопки */
+    .btn {
+      display: inline-block;
+      padding: 16px 36px;
+      background-color: var(--accent);
+      color: var(--white);
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
+    }
+
+    .btn:hover {
+      background-color: var(--accent-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(46, 125, 50, 0.3);
+    }
+
+    /* Header */
+    header {
+      padding: 60px 20px 100px;
+      background: linear-gradient(180deg, #F9FAF5 0%, #FFFFFF 100%);
+      text-align: center;
+    }
+
+    header h1 {
+        max-width: 900px;
+        margin: 0 auto 24px;
+    }
+
+    header p {
+      color: var(--text-muted);
+      max-width: 720px;
+      margin: 0 auto 40px;
+      font-size: 1.1rem;
+    }
+
+    /* Blocks */
+    .grid {
+      display: grid;
+      gap: 32px;
+    }
+
+    @media (min-width: 768px) {
+      .grid-2 { grid-template-columns: repeat(2, 1fr); }
+      .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .card {
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 32px;
+      background-color: var(--white);
+      transition: border-color 0.2s ease;
+    }
+
+    .card:hover {
+        border-color: var(--accent);
+    }
+
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 0;
+    }
+
+    /* Accent section */
+    .accent {
+      background-color: var(--accent-soft);
+      border-radius: 24px;
+      padding: 80px 40px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 100px 20px;
+      background-color: #0F172A;
+      color: #CBD5E1;
+      text-align: center;
+    }
+
+    footer h2 {
+      color: var(--white);
+    }
+
+    footer p {
+      max-width: 680px;
+      margin: 16px auto 40px;
+    }
+
+    /* Mobile CTA */
+    .mobile-cta {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 2.2rem; }
+      h2 { font-size: 1.8rem; }
+      section { padding: 60px 20px; }
+
+      .mobile-cta {
+        display: block;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: var(--white);
+        padding: 16px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+        z-index: 1000;
+      }
+
+      .mobile-cta .btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="brand">ТЕРИОН</div>
+    <h1>Согласование перепланировки и переустройства недвижимости по всей России</h1>
+    <p>
+      Работаем с квартирами и нежилыми помещениями.
+      От первичной консультации — до ввода объекта в эксплуатацию, включая сложные и нестандартные случаи.
+    </p>
+    <a href="#contact" class="btn">Получить консультацию</a>
+  </div>
+</header>
+
+<section>
+  <h2>С кем мы работаем</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <h3>Собственники</h3>
+      <p>Квартиры, апартаменты, нежилые помещения.</p>
+    </div>
+    <div class="card">
+      <h3>Инвесторы</h3>
+      <p>Оценка объекта до и после переустройства, инвестиционные кейсы.</p>
+    </div>
+    <div class="card">
+      <h3>Сложные ситуации</h3>
+      <p>Отказы, старые перепланировки, объекты с изменёнными нормами.</p>
+    </div>
+  </div>
+</section>
+
+<section class="accent">
+  <h2>Наш подход</h2>
+  <p>
+    Мы занимаемся исключительно вопросами недвижимости и переустройства.
+    Работаем только в правовом поле и ориентируемся на действующую практику согласования.
+  </p>
+  <p>
+    В работе участвуют профильные специалисты: инженеры, эксперты и юристы по недвижимости.
+    В отдельных случаях ввод объекта возможен только в установленной законом судебной процедуре —
+    мы сопровождаем такие кейсы в рамках нашей деятельности.
+  </p>
+</section>
+
+<section>
+  <h2>Услуги</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Первичная консультация</h3>
+      <p>Анализ ситуации, документов и возможных путей оформления.</p>
+    </div>
+    <div class="card">
+      <h3>Экспертиза объекта</h3>
+      <p>Техническая и правовая оценка возможности узаконивания.</p>
+    </div>
+    <div class="card">
+      <h3>Проект и документация</h3>
+      <p>Подготовка материалов для согласования и последующих процедур.</p>
+    </div>
+    <div class="card">
+      <h3>Согласование и сопровождение</h3>
+      <p>Работа с инстанциями до завершения процесса.</p>
+    </div>
+    <div class="card">
+      <h3>Судебное сопровождение</h3>
+      <p>Представительство по делам о переустройстве и перепланировке недвижимости.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>География работы</h2>
+  <p>
+    Мы работаем по всей территории Российской Федерации.
+    Процедуры и стоимость отдельных услуг могут отличаться в зависимости от региона и типа объекта.
+  </p>
+</section>
+
+<footer id="contact">
+  <h2>Получите консультацию специалиста</h2>
+  <p>
+    Разберём вашу ситуацию и определим возможный порядок действий.
+  </p>
+  <a href="https://t.me/terion_bot?start=landing" class="btn">Оставить заявку</a>
+</footer>
+
+<div class="mobile-cta">
+  <a href="https://t.me/terion_bot?start=landing" class="btn">Получить консультацию</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+<svg width="600" height="150" viewBox="0 0 600 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Иконка слева -->
+  <g transform="translate(0, 15) scale(0.6)">
+    <rect width="200" height="200" rx="40" fill="#2E7D32"/>
+    <path d="M50 60H150V85H112.5V150H87.5V85H50V60Z" fill="white"/>
+  </g>
+
+  <!-- Текст ТЕРИОН -->
+  <text x="140" y="85" font-family="Inter, sans-serif" font-weight="600" font-size="64" fill="#1A1A1A">ТЕРИОН</text>
+
+  <!-- Подпись -->
+  <text x="140" y="120" font-family="Inter, sans-serif" font-weight="400" font-size="18" fill="#555555" letter-spacing="0.1em">СОГЛАСОВАНИЕ ПЕРЕПЛАНИРОВОК</text>
+</svg>

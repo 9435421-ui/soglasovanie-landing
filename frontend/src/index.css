@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tg-theme-bg-color: #F8F9FA;
+  --tg-theme-text-color: #1A1A1A;
+  --tg-theme-hint-color: #707579;
+  --tg-theme-link-color: #2E7D32;
+  --tg-theme-button-color: #2E7D32;
+  --tg-theme-button-text-color: #ffffff;
+}
+
+body {
+  @apply font-sans antialiased;
+}
+
+.tg-button {
+  @apply bg-terion-green text-white py-3 px-6 rounded-xl font-semibold transition-transform active:scale-95;
+}
